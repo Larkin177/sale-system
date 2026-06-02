@@ -29,3 +29,18 @@ export function getAllOrders(params) {
 export function updateOrderStatus(id, status) {
   return request.put(`/admin/orders/${id}/status`, { status })
 }
+
+// 模拟支付（沙箱测试）
+export function simulatePayment(id) {
+  return request.post(`/admin/orders/${id}/simulate-pay`)
+}
+
+// 获取发货消息预览
+export function getDeliveryPreview(id) {
+  return request.get(`/admin/orders/${id}/delivery-preview`)
+}
+
+// 发送发货消息
+export function sendDelivery(id) {
+  return request.post(`/admin/orders/${id}/send-delivery`)
+}

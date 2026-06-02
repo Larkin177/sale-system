@@ -2,7 +2,7 @@
   <div class="layout">
     <el-header class="header">
       <div class="header-left">
-        <h1 class="logo">销售分润系统</h1>
+        <h1 class="logo">{{ siteName }} 销售端</h1>
       </div>
       <div class="header-right">
         <el-dropdown @command="handleCommand">
@@ -62,13 +62,27 @@
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getSiteSettings } from '@/api/config'
 import { User, ArrowDown, Link, SwitchButton, DataAnalysis, List, Trophy } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const siteName = ref('系统')
+
+onMounted(async () => {
+  try {
+    const res = await getSiteSettings()
+    if (res?.data?.site_name) {
+      siteName.value = res.data.site_name
+    }
+  } catch (e) {
+    // use default
+  }
+})
 
 const handleCommand = (command) => {
   switch (command) {

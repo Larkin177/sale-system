@@ -13,4 +13,6 @@ public class CreateOrderRequest {
     private Long salesId;
 
     private String salesCode;
+
+    private String phone;
 }

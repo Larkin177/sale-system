@@ -40,9 +40,13 @@ wechat:
   cert-path: classpath:cert/apiclient_cert.p12
   notify-url: https://your-domain.com/api/webhook/wechat
 
-# 支付宝配置（需要替换为真实配置）
+# 支付宝沙箱配置
 alipay:
-  app-id: your-app-id
-  private-key: your-private-key
-  alipay-public-key: your-alipay-public-key
-  notify-url: https://your-domain.com/api/webhook/alipay
+  app-id: sandbox  # 沙箱环境会覆盖
+  private-key: ""  # 应用私钥（沙箱）
+  alipay-public-key: ""  # 支付宝公钥（沙箱）
+  gateway-url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+  notify-url: http://localhost:8080/api/alipay/notify
+  return-url: http://localhost:3000/pay
+  sign-type: RSA2
+  sandbox: true

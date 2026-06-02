@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sales.dto.ApiResponse;
 import com.sales.dto.ClaimOrderRequest;
+import com.sales.entity.CustomerPrice;
 import com.sales.entity.Order;
 import com.sales.entity.Sales;
+import com.sales.mapper.CustomerPriceMapper;
 import com.sales.mapper.OrderMapper;
 import com.sales.mapper.SalesMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 @Service
@@ -24,6 +28,7 @@ public class OrderService {
 
     private final OrderMapper orderMapper;
     private final SalesMapper salesMapper;
+    private final CustomerPriceMapper customerPriceMapper;
 
     public Order createOrder(Long salesId, BigDecimal baseAmount) {
         Order order = new Order();
@@ -110,6 +115,73 @@ public class OrderService {
         stats.put("monthAmount", monthAmount);
 
         return ApiResponse.success(stats);
+    }
+
+    public Map<String, Object> getCustomerLastOrder(String phone) {
+        Map<String, Object> lastOrder = orderMapper.findLastOrder_byPhone(phone);
+        if (lastOrder == null) {
+            return null;
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("amount", lastOrder.get("amount"));
+        result.put("orderNo", lastOrder.get("order_no"));
+        result.put("createdAt", lastOrder.get("created_at"));
+
+        // Look up sales code from sales table if sales_id exists
+        Object salesIdObj = lastOrder.get("sales_id");
+        if (salesIdObj != null) {
+            Long salesId = Long.valueOf(salesIdObj.toString());
+            Sales sales = salesMapper.selectById(salesId);
+            if (sales != null) {
+                result.put("salesCode", sales.getCode());
+            }
+        }
+
+        return result;
+    }
+
+    public void saveCustomerPrice(String phone, BigDecimal price, Long salesId, String orderNo) {
+        // Upsert: if phone+salesId exists, update price; otherwise insert
+        CustomerPrice existing = customerPriceMapper.selectOne(
+                new LambdaQueryWrapper<CustomerPrice>()
+                        .eq(CustomerPrice::getPhone, phone)
+                        .eq(CustomerPrice::getSalesId, salesId));
+        if (existing != null) {
+            existing.setPrice(price);
+            existing.setOrderNo(orderNo);
+            customerPriceMapper.updateById(existing);
+        } else {
+            CustomerPrice cp = new CustomerPrice();
+            cp.setPhone(phone);
+            cp.setPrice(price);
+            cp.setSalesId(salesId);
+            cp.setOrderNo(orderNo);
+            customerPriceMapper.insert(cp);
+        }
+    }
+
+    public Map<String, Object> getCustomerPrice(String phone) {
+        // Look up customer_prices for this phone, order by created_at DESC
+        List<CustomerPrice> prices = customerPriceMapper.selectList(
+                new LambdaQueryWrapper<CustomerPrice>()
+                        .eq(CustomerPrice::getPhone, phone)
+                        .orderByDesc(CustomerPrice::getCreatedAt));
+        if (prices.isEmpty()) {
+            return null;
+        }
+        CustomerPrice latest = prices.get(0);
+        Map<String, Object> result = new HashMap<>();
+        result.put("price", latest.getPrice());
+
+        // Look up sales code from sales table if sales_id exists
+        if (latest.getSalesId() != null) {
+            Sales sales = salesMapper.selectById(latest.getSalesId());
+            if (sales != null) {
+                result.put("salesCode", sales.getCode());
+            }
+        }
+        return result;
     }
 
     private String generateOrderNo() {

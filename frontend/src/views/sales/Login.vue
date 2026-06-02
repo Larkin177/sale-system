@@ -10,6 +10,11 @@
           <el-input v-model="form.password" type="password" placeholder="密码" prefix-icon="Lock" show-password />
         </el-form-item>
         <el-form-item>
+          <div class="login-options">
+            <el-checkbox v-model="rememberMe">记住密码</el-checkbox>
+          </div>
+        </el-form-item>
+        <el-form-item>
           <el-button type="primary" class="login-btn" @click="handleLogin" :loading="loading">
             登录
           </el-button>
@@ -23,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -33,6 +38,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
+const rememberMe = ref(false)
 
 const form = ref({
   phone: '',
@@ -44,11 +50,28 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
+onMounted(() => {
+  const savedAccount = localStorage.getItem('sales_login_account')
+  const savedPwd = localStorage.getItem('sales_login_password')
+  if (savedAccount) form.value.phone = savedAccount
+  if (savedPwd) {
+    form.value.password = savedPwd
+    rememberMe.value = true
+  }
+})
+
 const handleLogin = async () => {
   await formRef.value.validate()
   loading.value = true
   try {
     const res = await request.post('/auth/sales/login', form.value)
+    if (rememberMe.value) {
+      localStorage.setItem('sales_login_account', form.value.phone)
+      localStorage.setItem('sales_login_password', form.value.password)
+    } else {
+      localStorage.setItem('sales_login_account', form.value.phone)
+      localStorage.removeItem('sales_login_password')
+    }
     authStore.setAuth(res.data.token, 'sales', res.data.sales)
     ElMessage.success('登录成功')
     router.push('/s/dashboard')
@@ -76,6 +99,12 @@ h2 {
   text-align: center;
   margin-bottom: 30px;
   color: #333;
+}
+.login-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 .login-btn {
   width: 100%;

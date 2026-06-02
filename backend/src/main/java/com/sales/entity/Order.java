@@ -36,4 +36,21 @@ public class Order {
     private LocalDateTime createdAt;
 
     private LocalDateTime paidAt;
+
+    // v2: 产品与授权字段
+    private Long productId;
+
+    private String productName;
+
+    private String authCode;
+
+    private String authStatus;
+
+    private LocalDateTime authUsedAt;
+
+    private String authMachine;
+
+    private Integer authUses;
+
+    private LocalDateTime authLastValidatedAt;
 }
