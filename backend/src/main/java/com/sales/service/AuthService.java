@@ -39,6 +39,8 @@ public class AuthService {
         String token = jwtUtil.generateToken(sales.getId(), "sales");
         Map<String, Object> data = new HashMap<>();
         data.put("token", token);
+        // 不返回密码哈希
+        sales.setPassword(null);
         data.put("sales", sales);
         return ApiResponse.success(data);
     }
@@ -56,6 +58,8 @@ public class AuthService {
         String token = jwtUtil.generateToken(admin.getId(), "admin");
         Map<String, Object> data = new HashMap<>();
         data.put("token", token);
+        // 不返回密码哈希
+        admin.setPassword(null);
         data.put("admin", admin);
         return ApiResponse.success(data);
     }

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="pay-page" v-loading="pageLoading">
     <!-- Hero Section -->
     <div
@@ -313,6 +313,9 @@ const captchaLoading = ref(false)
 const showQrCode = ref(false)
 const qrCodeImage = ref('')
 const orderNo = ref('')
+const wechatPayMode = ref('static')
+const alipayPayMode = ref('static')
+const isStaticMode = ref(true)
 
 // Load CAPTCHA when phone number reaches 11 digits
 watch(phoneInput, (val) => {
@@ -581,6 +584,13 @@ const handlePay = async () => {
     // Order created
     orderNo.value = res.data.orderNo
 
+    // Capture payment modes
+    wechatPayMode.value = res.data.wechatMode || 'static'
+    alipayPayMode.value = res.data.alipayMode || 'static'
+    isStaticMode.value = paymentMethod.value === 'wechat' 
+      ? wechatPayMode.value === 'static' 
+      : alipayPayMode.value === 'static'
+
     // 优先使用支付宝动态二维码（从订单创建接口返回）
     if (res.data.alipayQrCode) {
       qrCodeImage.value = res.data.alipayQrCode
@@ -600,8 +610,19 @@ const handlePay = async () => {
 }
 
 // Handle paid confirmation
-const handlePaid = () => {
-  ElMessage.success('支付确认已提交，请等待系统处理')
+const handlePaid = async () => {
+  if (isStaticMode.value) {
+    // Static mode: submit to admin for review
+    try {
+      await request.post('/pay/mark-paid', { orderNo: orderNo.value })
+      ElMessage.success('支付确认已提交，请等待管理员审核后自动发货')
+    } catch (e) {
+      ElMessage.error('提交失败，请重试')
+      return
+    }
+  } else {
+    ElMessage.success('支付确认已提交，请等待系统处理')
+  }
   showQrCode.value = false
   showPayModal.value = false
   // Reset state
@@ -611,6 +632,7 @@ const handlePaid = () => {
   captchaAnswer.value = ''
   phoneHistory.value = null
   orderNo.value = ''
+  paidSubmitted.value = false
   qrCodeImage.value = ''
   codeSent.value = false
   captchaId.value = ''

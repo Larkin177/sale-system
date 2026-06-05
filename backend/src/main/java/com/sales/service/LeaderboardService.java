@@ -24,10 +24,10 @@ public class LeaderboardService {
         // 直接从数据库查询本月销售排行榜
         LocalDateTime monthStart = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
 
-        // 查询所有已支付的订单
+        // 查询所有已支付/已发货/已核销的订单
         List<Order> orders = orderMapper.selectList(
                 new LambdaQueryWrapper<Order>()
-                        .eq(Order::getStatus, "paid")
+                        .in(Order::getStatus, "paid", "delivered", "redeemed")
                         .ge(Order::getPaidAt, monthStart));
 
         // 按销售ID分组统计

@@ -26,9 +26,10 @@ public class AuthValidationService {
 
     @Transactional
     public AuthValidateResponse validateCode(String authCode, String machine, String ipAddress) {
-        // 1. 根据auth_code查找订单
+        // 1. 根据auth_code查找订单（取最新的一条）
         Order order = orderMapper.selectOne(
-                new LambdaQueryWrapper<Order>().eq(Order::getAuthCode, authCode));
+                new LambdaQueryWrapper<Order>().eq(Order::getAuthCode, authCode)
+                        .orderByDesc(Order::getId).last("LIMIT 1"));
         if (order == null) {
             logAuth(null, authCode, "validate", machine, ipAddress, "failed", "授权码不存在");
             return buildError("授权码不存在");

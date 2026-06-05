@@ -50,9 +50,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'paid' ? 'success' : 'info'">
-              {{ row.status === 'paid' ? '已支付' : row.status }}
-            </el-tag>
+            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="时间" />
@@ -68,6 +66,16 @@ import request from '@/utils/request'
 
 const stats = ref({})
 const recentOrders = ref([])
+
+const getStatusType = (status) => {
+  const map = { pending: 'info', paid: 'success', delivered: 'success', redeemed: '', bound: 'warning', settled: '' }
+  return map[status] || 'info'
+}
+
+const getStatusText = (status) => {
+  const map = { pending: '待支付', paid: '已支付', delivered: '已发货', redeemed: '已核销', bound: '已绑定', settled: '已结算' }
+  return map[status] || status
+}
 
 onMounted(async () => {
   try {

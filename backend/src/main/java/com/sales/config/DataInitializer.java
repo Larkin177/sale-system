@@ -19,7 +19,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // 确保admin存在且密码正确
+        // 仅在admin不存在时创建默认账号，不覆盖已有密码
         Admin admin = adminMapper.selectOne(
                 new LambdaQueryWrapper<Admin>().eq(Admin::getUsername, "admin"));
         if (admin == null) {
@@ -28,13 +28,6 @@ public class DataInitializer implements CommandLineRunner {
             admin.setPassword(passwordEncoder.encode("admin123"));
             adminMapper.insert(admin);
             log.info("管理员账号已创建: admin / admin123");
-        } else {
-            // 验证密码是否正确，不正确则重置
-            if (!passwordEncoder.matches("admin123", admin.getPassword())) {
-                admin.setPassword(passwordEncoder.encode("admin123"));
-                adminMapper.updateById(admin);
-                log.info("管理员密码已重置: admin123");
-            }
         }
     }
 }

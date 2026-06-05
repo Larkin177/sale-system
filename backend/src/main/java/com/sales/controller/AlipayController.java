@@ -2,7 +2,9 @@ package com.sales.controller;
 
 import com.sales.dto.ApiResponse;
 import com.sales.entity.Order;
+import com.sales.entity.Product;
 import com.sales.mapper.OrderMapper;
+import com.sales.mapper.ProductMapper;
 import com.sales.service.AlipayService;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
@@ -25,6 +27,7 @@ public class AlipayController {
 
     private final AlipayService alipayService;
     private final OrderMapper orderMapper;
+    private final ProductMapper productMapper;
     private final OrderService orderService;
     private final CommissionService commissionService;
     private final AuthCodeService authCodeService;
@@ -127,12 +130,25 @@ public class AlipayController {
      */
     private void autoDeliver(Order order) {
         try {
+            // 如果订单没有产品ID，使用默认产品
+            if (order.getProductId() == null) {
+                order.setProductId(1L);
+            }
+
+            // 获取产品配置
             int validityHours = 72;
+            Product product = productMapper.selectById(order.getProductId());
+            if (product != null) {
+                if (product.getAuthValidityHours() != null) {
+                    validityHours = product.getAuthValidityHours();
+                }
+                order.setProductName(product.getName());
+            }
+
             String authCode = authCodeService.generateAuthCode(order.getId(), validityHours);
 
             order.setAuthCode(authCode);
             order.setAuthStatus("active");
-            order.setProductId(1L);
             order.setStatus("delivered");
             orderMapper.updateById(order);
 
@@ -142,12 +158,17 @@ public class AlipayController {
             }
 
             String siteName = siteSettingService.getSetting("site_name");
+            String downloadUrl = siteSettingService.getSetting("site_url");
+            if (downloadUrl == null || downloadUrl.isEmpty()) {
+                downloadUrl = "http://localhost:3000";
+            }
+
             String message = template
                     .replace("{site_name}", siteName != null ? siteName : "系统")
                     .replace("{order_no}", order.getOrderNo())
                     .replace("{amount}", order.getAmount().toString())
                     .replace("{phone}", order.getCustomerPhone() != null ? order.getCustomerPhone() : "")
-                    .replace("{download_url}", "http://localhost:3000/download?token=auto")
+                    .replace("{download_url}", downloadUrl)
                     .replace("{auth_code}", authCode);
 
             log.info("[自动发货] 订单: {}, 手机: {}, 授权码: {}",

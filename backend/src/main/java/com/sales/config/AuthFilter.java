@@ -3,21 +3,23 @@ package com.sales.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sales.dto.ApiResponse;
 import com.sales.util.JwtUtil;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.HandlerInterceptor;
 
-// 不注册为 Spring Bean，认证逻辑已迁移到 AuthFilter
+import java.io.IOException;
+
+@Component
 @RequiredArgsConstructor
-public class AuthInterceptor implements HandlerInterceptor {
+public class AuthFilter implements Filter {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
 
-    // 公开接口前缀（不需要认证）
-    private static final String[] PUBLIC_PATHS = {
+    // 公开接口前缀
+    private static final String[] PUBLIC_PREFIXES = {
         "/api/auth/validate",
         "/api/auth/redeem",
         "/api/auth/sales/login",
@@ -37,29 +39,36 @@ public class AuthInterceptor implements HandlerInterceptor {
     };
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // OPTIONS 请求放行
+    public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+            throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) req;
+        HttpServletResponse response = (HttpServletResponse) res;
+
+        // OPTIONS 放行
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            return true;
+            chain.doFilter(req, res);
+            return;
         }
 
         String uri = request.getRequestURI();
-        try { java.nio.file.Files.write(java.nio.file.Paths.get("C:/temp/auth-debug.log"),
-                ("URI=" + uri + " METHOD=" + request.getMethod() + "\n").getBytes(),
+        try { java.nio.file.Files.write(java.nio.file.Paths.get("C:/temp/filter-debug.log"),
+                ("FILTER URI=" + uri + " METHOD=" + request.getMethod() + "\n").getBytes(),
                 java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         } catch (Exception ignored) {}
 
         // 公开接口放行
-        for (String path : PUBLIC_PATHS) {
-            if (uri.startsWith(path)) {
-                return true;
+        for (String prefix : PUBLIC_PREFIXES) {
+            if (uri.startsWith(prefix)) {
+                chain.doFilter(req, res);
+                return;
             }
         }
 
+        // 需要认证
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             writeError(response, 401, "未登录或token无效");
-            return false;
+            return;
         }
 
         String token = authHeader.substring(7);
@@ -70,27 +79,26 @@ public class AuthInterceptor implements HandlerInterceptor {
             // 管理端接口只能 admin 角色访问
             if (uri.startsWith("/api/admin") && !"admin".equals(role)) {
                 writeError(response, 403, "权限不足");
-                return false;
+                return;
             }
 
             // 销售端接口只能 sales 角色访问
             if (uri.startsWith("/api/orders") && !"sales".equals(role)) {
                 writeError(response, 403, "权限不足");
-                return false;
+                return;
             }
 
-            // 将用户信息存入 request 供后续使用
+            // 将用户信息存入 request
             request.setAttribute("userId", userId);
             request.setAttribute("role", role);
-            return true;
+            chain.doFilter(req, res);
 
         } catch (Exception e) {
             writeError(response, 401, "token无效或已过期");
-            return false;
         }
     }
 
-    private void writeError(HttpServletResponse response, int status, String message) throws Exception {
+    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
         ApiResponse<Void> body = ApiResponse.error(status, message);

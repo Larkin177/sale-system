@@ -1,9 +1,12 @@
 package com.sales.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sales.dto.ApiResponse;
 import com.sales.entity.Order;
 import com.sales.mapper.OrderMapper;
+import com.sales.entity.Product;
+import com.sales.mapper.ProductMapper;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
 import com.sales.service.ConfigService;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -24,6 +28,7 @@ public class AdminOrderController {
 
     private final OrderService orderService;
     private final OrderMapper orderMapper;
+    private final ProductMapper productMapper;
     private final CommissionService commissionService;
     private final AuthCodeService authCodeService;
     private final ConfigService configService;
@@ -32,13 +37,87 @@ public class AdminOrderController {
     @GetMapping
     public ApiResponse<Page<Order>> list(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return orderService.listAllOrders(page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String status) {
+        Page<Order> pageParam = new Page<>(page, size);
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<Order>()
+                .orderByDesc(Order::getCreatedAt);
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(Order::getStatus, status);
+        }
+        Page<Order> result = orderMapper.selectPage(pageParam, wrapper);
+        return ApiResponse.success(result);
     }
 
     @GetMapping("/unclaimed")
     public ApiResponse<List<Order>> unclaimed() {
         return orderService.listUnclaimedOrders();
+    }
+
+    /**
+     * 管理员确认收款（静态支付模式）
+     */
+    @PostMapping("/{id}/confirm-payment")
+    public ApiResponse<Map<String, String>> confirmPayment(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        Long adminId = body.get("adminId") != null ? Long.valueOf(body.get("adminId")) : null;
+        String note = body.getOrDefault("note", "");
+
+        Order order = orderMapper.selectById(id);
+        if (order == null) {
+            return ApiResponse.error("订单不存在");
+        }
+        if (!"pending".equals(order.getStatus()) && !"pending_verify".equals(order.getStatus())) {
+            return ApiResponse.error("订单状态不正确，当前状态: " + order.getStatus());
+        }
+
+        // 1. 标记已支付
+        order.setStatus("paid");
+        order.setPaymentMethod(body.getOrDefault("paymentMethod", "wechat"));
+        order.setPaymentNo("MANUAL-" + System.currentTimeMillis());
+        order.setPaidAt(LocalDateTime.now());
+        order.setReviewedBy(adminId);
+        order.setReviewNote(note);
+        order.setReviewedAt(LocalDateTime.now());
+        orderMapper.updateById(order);
+
+        // 2. 计算分润
+        if (order.getSalesId() != null) {
+            commissionService.calculateCommission(order.getId());
+        }
+
+        // 3. 自动发货：生成授权码
+        autoDeliver(order);
+
+        log.info("管理员确认收款 - 订单: {}, 操作人: {}", order.getOrderNo(), adminId);
+
+        Map<String, String> result = Map.of("status", "delivered", "message", "确认收款成功，已自动发货");
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 管理员拒绝收款（静态支付模式）
+     */
+    @PostMapping("/{id}/reject-payment")
+    public ApiResponse<Void> rejectPayment(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        Long adminId = body.get("adminId") != null ? Long.valueOf(body.get("adminId")) : null;
+        String note = body.getOrDefault("note", "");
+
+        Order order = orderMapper.selectById(id);
+        if (order == null) {
+            return ApiResponse.error("订单不存在");
+        }
+        if (!"pending".equals(order.getStatus()) && !"pending_verify".equals(order.getStatus())) {
+            return ApiResponse.error("订单状态不正确，当前状态: " + order.getStatus());
+        }
+
+        order.setReviewedBy(adminId);
+        order.setReviewNote("已拒绝: " + note);
+        order.setReviewedAt(LocalDateTime.now());
+        // 打回 pending 状态，不发货
+        orderMapper.updateById(order);
+
+        log.info("管理员拒绝收款 - 订单: {}, 原因: {}", order.getOrderNo(), note);
+        return ApiResponse.success();
     }
 
     /**
@@ -52,7 +131,7 @@ public class AdminOrderController {
         if (order == null) {
             return ApiResponse.error("订单不存在");
         }
-        if (!"pending".equals(order.getStatus())) {
+        if (!"pending".equals(order.getStatus()) && !"pending_verify".equals(order.getStatus())) {
             return ApiResponse.error("订单状态不正确，当前状态: " + order.getStatus());
         }
 
@@ -68,7 +147,7 @@ public class AdminOrderController {
             commissionService.calculateCommission(order.getId());
         }
 
-        // 3. 自动发货：生成授权码 + 发送短信
+        // 3. 自动发货：生成授权码
         autoDeliver(order);
 
         log.info("订单 {} 已模拟支付并自动发货", order.getOrderNo());
@@ -76,18 +155,33 @@ public class AdminOrderController {
     }
 
     /**
-     * 自动发货：生成授权码 + 发送短信（支付完成后自动调用）
+     * 自动发货：生成授权码（支付完成后自动调用）
      */
     private void autoDeliver(Order order) {
         try {
-            // 生成授权码
+            // 如果订单没有产品ID，使用默认产品
+            if (order.getProductId() == null) {
+                order.setProductId(1L);
+            }
+
+            // 获取产品配置
             int validityHours = 72;
+            String productName = "CC-Installer";
+            Product product = productMapper.selectById(order.getProductId());
+            if (product != null) {
+                if (product.getAuthValidityHours() != null) {
+                    validityHours = product.getAuthValidityHours();
+                }
+                productName = product.getName();
+                order.setProductName(productName);
+            }
+
+            // 生成授权码
             String authCode = authCodeService.generateAuthCode(order.getId(), validityHours);
 
             // 保存授权码到订单
             order.setAuthCode(authCode);
             order.setAuthStatus("active");
-            order.setProductId(1L); // CC-Installer
             order.setStatus("delivered");
             orderMapper.updateById(order);
 
@@ -98,7 +192,10 @@ public class AdminOrderController {
             }
 
             String siteName = siteSettingService.getSetting("site_name");
-            String downloadUrl = "http://localhost:3000/download?token=auto";
+            String downloadUrl = siteSettingService.getSetting("site_url");
+            if (downloadUrl == null || downloadUrl.isEmpty()) {
+                downloadUrl = "http://localhost:3000";
+            }
 
             String message = template
                     .replace("{site_name}", siteName != null ? siteName : "系统")

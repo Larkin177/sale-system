@@ -50,3 +50,16 @@ alipay:
   return-url: http://localhost:3000/pay
   sign-type: RSA2
   sandbox: true
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.sales: DEBUG
+    com.sales.controller: DEBUG
+    com.sales.service: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/sales-system.log

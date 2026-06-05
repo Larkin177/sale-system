@@ -15,12 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 @Service
 @RequiredArgsConstructor
@@ -89,36 +89,15 @@ public class OrderService {
     }
 
     public ApiResponse<Object> getMyStats(Long salesId) {
-        // 总成交额
-        List<Order> orders = orderMapper.selectList(
-                new LambdaQueryWrapper<Order>()
-                        .eq(Order::getSalesId, salesId)
-                        .eq(Order::getStatus, "paid"));
-
-        double totalAmount = orders.stream()
-                .mapToDouble(o -> o.getAmount().doubleValue())
-                .sum();
-
-        // 本月成交额
-        LocalDateTime monthStart = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-        double monthAmount = orders.stream()
-                .filter(o -> o.getPaidAt() != null && o.getPaidAt().isAfter(monthStart))
-                .mapToDouble(o -> o.getAmount().doubleValue())
-                .sum();
-
-        java.util.Map<String, Object> stats = new java.util.HashMap<>();
-        stats.put("totalOrders", orders.size());
-        stats.put("totalAmount", totalAmount);
-        stats.put("monthOrders", orders.stream()
-                .filter(o -> o.getPaidAt() != null && o.getPaidAt().isAfter(monthStart))
-                .count());
-        stats.put("monthAmount", monthAmount);
+        // 使用SQL聚合查询替代Java层聚合，提高性能
+        Map<String, Object> stats = orderMapper.getSalesStats(salesId);
 
         return ApiResponse.success(stats);
     }
 
     public Map<String, Object> getCustomerLastOrder(String phone) {
-        Map<String, Object> lastOrder = orderMapper.findLastOrder_byPhone(phone);
+        // 使用JOIN查询替代N+1查询，提高性能
+        Map<String, Object> lastOrder = orderMapper.findLastOrder_byPhoneWithSales(phone);
         if (lastOrder == null) {
             return null;
         }
@@ -127,16 +106,7 @@ public class OrderService {
         result.put("amount", lastOrder.get("amount"));
         result.put("orderNo", lastOrder.get("order_no"));
         result.put("createdAt", lastOrder.get("created_at"));
-
-        // Look up sales code from sales table if sales_id exists
-        Object salesIdObj = lastOrder.get("sales_id");
-        if (salesIdObj != null) {
-            Long salesId = Long.valueOf(salesIdObj.toString());
-            Sales sales = salesMapper.selectById(salesId);
-            if (sales != null) {
-                result.put("salesCode", sales.getCode());
-            }
-        }
+        result.put("salesCode", lastOrder.get("sales_code"));
 
         return result;
     }
@@ -184,8 +154,10 @@ public class OrderService {
         return result;
     }
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     private String generateOrderNo() {
         return "ORD" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-                + String.format("%04d", new Random().nextInt(10000));
+                + String.format("%04d", SECURE_RANDOM.nextInt(10000));
     }
 }

@@ -52,10 +52,8 @@ const rules = {
 
 onMounted(() => {
   const savedAccount = localStorage.getItem('sales_login_account')
-  const savedPwd = localStorage.getItem('sales_login_password')
-  if (savedAccount) form.value.phone = savedAccount
-  if (savedPwd) {
-    form.value.password = savedPwd
+  if (savedAccount) {
+    form.value.phone = savedAccount
     rememberMe.value = true
   }
 })
@@ -65,12 +63,11 @@ const handleLogin = async () => {
   loading.value = true
   try {
     const res = await request.post('/auth/sales/login', form.value)
+    // 只记住手机号，不存储密码
     if (rememberMe.value) {
       localStorage.setItem('sales_login_account', form.value.phone)
-      localStorage.setItem('sales_login_password', form.value.password)
     } else {
-      localStorage.setItem('sales_login_account', form.value.phone)
-      localStorage.removeItem('sales_login_password')
+      localStorage.removeItem('sales_login_account')
     }
     authStore.setAuth(res.data.token, 'sales', res.data.sales)
     ElMessage.success('登录成功')

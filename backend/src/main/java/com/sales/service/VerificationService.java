@@ -50,6 +50,19 @@ public class VerificationService {
     }
 
     public String verifyCode(String phone, String code, String purpose) {
+        // 检查5分钟内错误尝试次数（防止暴力破解）
+        LocalDateTime fiveMinutesAgo = LocalDateTime.now().minusMinutes(5);
+        Long errorCount = verificationCodeMapper.selectCount(
+                new LambdaQueryWrapper<VerificationCode>()
+                        .eq(VerificationCode::getPhone, phone)
+                        .eq(VerificationCode::getPurpose, purpose)
+                        .gt(VerificationCode::getCreatedAt, fiveMinutesAgo));
+        // 包含正确的那次，所以如果5分钟内已有5次尝试（含正确），拒绝
+        // 这里简化：5分钟内最多尝试5次
+        if (errorCount >= 5) {
+            return "尝试次数过多，请5分钟后再试";
+        }
+
         // Find the latest unused, non-expired code
         VerificationCode verificationCode = verificationCodeMapper.selectOne(
                 new LambdaQueryWrapper<VerificationCode>()

@@ -47,6 +47,7 @@ public class SalesService {
         sales.setStatus("active");
 
         salesMapper.insert(sales);
+        sales.setPassword(null);
         return ApiResponse.success(sales);
     }
 
@@ -110,6 +111,7 @@ public class SalesService {
         sales.setStatus("active");
 
         salesMapper.insert(sales);
+        sales.setPassword(null);
         return ApiResponse.success(sales);
     }
 

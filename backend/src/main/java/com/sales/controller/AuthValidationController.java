@@ -34,7 +34,13 @@ public class AuthValidationController {
     }
 
     @PostMapping("/api/auth/revoke/{orderId}")
-    public ApiResponse<Void> revoke(@PathVariable Long orderId) {
+    public ApiResponse<Void> revoke(@PathVariable Long orderId,
+                                    jakarta.servlet.http.HttpServletRequest httpRequest) {
+        // 检查是否为管理员角色
+        String role = (String) httpRequest.getAttribute("role");
+        if (!"admin".equals(role)) {
+            return ApiResponse.error(403, "仅管理员可撤销授权码");
+        }
         return authValidationService.revokeCode(orderId);
     }
 
@@ -54,17 +60,36 @@ public class AuthValidationController {
         // Find order by auth_code
         Order order = orderMapper.selectOne(
             new LambdaQueryWrapper<Order>()
-                .eq(Order::getAuthCode, authCode));
+                .eq(Order::getAuthCode, authCode)
+                .orderByDesc(Order::getId).last("LIMIT 1"));
 
         if (order == null) {
             return ApiResponse.error("授权码不存在");
+        }
+
+        // 验证授权状态
+        if ("revoked".equals(order.getAuthStatus())) {
+            return ApiResponse.error("授权码已被撤销");
+        }
+        if ("expired".equals(order.getAuthStatus())) {
+            return ApiResponse.error("授权码已过期");
+        }
+
+        // 验证机器指纹匹配
+        if (machine != null && !machine.isEmpty()) {
+            if (order.getAuthMachine() == null) {
+                // 订单未经过验证绑定机器，不允许核销
+                return ApiResponse.error("授权码未绑定机器，无法核销");
+            }
+            if (!machine.equals(order.getAuthMachine())) {
+                return ApiResponse.error("机器指纹不匹配");
+            }
         }
 
         // Update order status to redeemed
         if (!"redeemed".equals(order.getAuthStatus())) {
             order.setAuthStatus("redeemed");
             order.setAuthUsedAt(LocalDateTime.now());
-            order.setAuthMachine(machine);
             orderMapper.updateById(order);
             log.info("Auth code redeemed: order={}, machine={}", order.getOrderNo(), machine);
         }

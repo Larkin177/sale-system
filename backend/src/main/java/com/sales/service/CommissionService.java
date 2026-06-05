@@ -35,16 +35,17 @@ public class CommissionService {
         }
 
         // 计算分润
+        // commissionRate 表示销售分润比例（如10表示销售拿10%）
         BigDecimal rate = sales.getCommissionRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
-        BigDecimal adminAmount = order.getAmount().multiply(rate).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal salesAmount = order.getAmount().subtract(adminAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal salesAmount = order.getAmount().multiply(rate).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal platformAmount = order.getAmount().subtract(salesAmount).setScale(2, RoundingMode.HALF_UP);
 
         // 创建分润记录
         Commission commission = new Commission();
         commission.setOrderId(orderId);
         commission.setSalesId(order.getSalesId());
         commission.setAmount(salesAmount);
-        commission.setAdminAmount(adminAmount);
+        commission.setAdminAmount(platformAmount);
         commission.setRate(sales.getCommissionRate());
         commission.setStatus("pending");
         commissionMapper.insert(commission);

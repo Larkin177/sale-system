@@ -53,4 +53,11 @@ public class Order {
     private Integer authUses;
 
     private LocalDateTime authLastValidatedAt;
+
+    // v3: 审核相关字段（静态支付模式）
+    private Long reviewedBy;
+
+    private String reviewNote;
+
+    private LocalDateTime reviewedAt;
 }

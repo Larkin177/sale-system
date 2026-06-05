@@ -24,8 +24,9 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="250">
         <template #default="{ row }">
+          <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
           <el-button type="primary" link @click="showEditDialog(row)">编辑</el-button>
           <el-button :type="row.status === 'active' ? 'danger' : 'success'" link @click="toggleStatus(row)">
             {{ row.status === 'active' ? '禁用' : '启用' }}
@@ -148,6 +149,10 @@ const toggleStatus = async (row) => {
   } catch (e) {
     console.error('操作失败')
   }
+}
+
+const viewDetail = (row) => {
+  window.location.href = `/admin/sales/${row.id}`
 }
 
 onMounted(loadSales)

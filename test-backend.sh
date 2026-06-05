@@ -52,6 +52,18 @@ test_case() {
   fi
 }
 
+# ── 清理上次测试残留数据（保证幂等性） ──
+echo -e "${YELLOW}清理测试数据...${NC}"
+mysql -u root -p123456 -P 3308 sales_system -e "
+  DELETE FROM auth_logs WHERE auth_code IN ('AIC-TEST123ABC456','AIC-TEST789DEF012');
+  DELETE FROM commissions WHERE order_id IN (SELECT id FROM orders WHERE auth_code IN ('AIC-TEST123ABC456','AIC-TEST789DEF012'));
+  DELETE FROM downloads WHERE order_id IN (SELECT id FROM orders WHERE auth_code IN ('AIC-TEST123ABC456','AIC-TEST789DEF012'));
+  DELETE FROM orders WHERE auth_code IN ('AIC-TEST123ABC456','AIC-TEST789DEF012');
+  DELETE FROM orders WHERE customer_phone = '13800001111' OR customer_phone = '13800002222';
+  DELETE FROM sales WHERE phone IN ('13800001111','13800002222');
+  DELETE FROM products WHERE slug = 'api-relay';
+" 2>/dev/null
+
 echo -e "${YELLOW}═══════════════════════════════════════${NC}"
 echo -e "${YELLOW}  1. 认证模块${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════${NC}"
@@ -315,7 +327,8 @@ echo -e "${YELLOW}  11. 下载功能${NC}"
 echo -e "${YELLOW}═══════════════════════════════════════${NC}"
 
 mysql -u root -p123456 -P 3308 sales_system -e "
-  INSERT IGNORE INTO downloads (order_id, download_token, download_count, expire_at)
+  DELETE FROM downloads WHERE download_token = 'dl-token-abc123';
+  INSERT INTO downloads (order_id, download_token, download_count, expire_at)
   VALUES ($ORDER1_ID, 'dl-token-abc123', 0, DATE_ADD(NOW(), INTERVAL 24 HOUR));
 " 2>/dev/null
 
