@@ -42,6 +42,13 @@ public class Order {
 
     private String productName;
 
+    // v4: 套餐字段
+    private Long packageId;
+
+    private String packageName;
+
+    private String platform;
+
     private String authCode;
 
     private String authStatus;

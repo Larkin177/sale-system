@@ -6,13 +6,12 @@ import java.math.BigDecimal;
 
 @Data
 public class CreateOrderRequest {
-    @NotNull(message = "金额不能为空")
-    @DecimalMin(value = "0.01", message = "金额必须大于0")
-    private BigDecimal amount;
-
-    private Long salesId;
+    @NotNull(message = "套餐ID不能为空")
+    private Long packageId;
 
     private String salesCode;
 
     private String phone;
+
+    private String paymentMethod;
 }

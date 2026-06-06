@@ -76,7 +76,21 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="自定义图标">
-                <el-input v-model="settings[`feature_${feat}_icon_url`]" placeholder="输入图标图片URL（可选，设置后覆盖上方图标）" />
+                <div class="icon-upload-row">
+                  <el-upload
+                    class="icon-uploader"
+                    action="/api/admin/upload"
+                    :show-file-list="false"
+                    :on-success="(res) => handleIconUpload(feat, res)"
+                    :before-upload="beforeImageUpload"
+                    accept="image/*"
+                  >
+                    <img v-if="settings[`feature_${feat}_icon_url`]" :src="settings[`feature_${feat}_icon_url`]" class="icon-preview" />
+                    <el-icon v-else class="icon-uploader-icon"><Plus /></el-icon>
+                  </el-upload>
+                  <el-input v-model="settings[`feature_${feat}_icon_url`]" placeholder="或输入图片URL" class="icon-url-input" />
+                </div>
+                <div class="field-hint">可选，设置后覆盖上方系统图标</div>
               </el-form-item>
               <el-form-item label="标题">
                 <el-input v-model="settings[`feature_${feat}_title`]" :placeholder="`特性 ${feat} 标题`" />
@@ -93,10 +107,61 @@
                   <el-option label="下载链接" value="download" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="内容值" v-if="settings[`feature_${feat}_content_type`] && settings[`feature_${feat}_content_type`] !== 'none'">
+              <el-form-item label="内容值" v-if="settings[`feature_${feat}_content_type`] && settings[`feature_${feat}_content_type`] !== 'none' && settings[`feature_${feat}_content_type`] !== 'text'">
+                <!-- 图片上传 -->
+                <div v-if="settings[`feature_${feat}_content_type`] === 'image'" class="content-upload-row">
+                  <el-upload
+                    class="content-uploader"
+                    action="/api/admin/upload"
+                    :show-file-list="false"
+                    :on-success="(res) => handleContentUpload(feat, res)"
+                    :before-upload="beforeImageUpload"
+                    accept="image/*"
+                  >
+                    <img v-if="settings[`feature_${feat}_content_value`]" :src="settings[`feature_${feat}_content_value`]" class="content-preview" />
+                    <el-icon v-else class="content-uploader-icon"><Plus /></el-icon>
+                  </el-upload>
+                  <el-input v-model="settings[`feature_${feat}_content_value`]" placeholder="或输入图片URL" class="content-url-input" />
+                </div>
+                <!-- 视频上传 -->
+                <div v-else-if="settings[`feature_${feat}_content_type`] === 'video'" class="content-upload-row">
+                  <el-upload
+                    class="content-uploader"
+                    action="/api/admin/upload"
+                    :show-file-list="false"
+                    :on-success="(res) => handleContentUpload(feat, res)"
+                    :before-upload="beforeVideoUpload"
+                    accept="video/*"
+                  >
+                    <video v-if="settings[`feature_${feat}_content_value`]" :src="settings[`feature_${feat}_content_value`]" class="content-preview" controls />
+                    <el-icon v-else class="content-uploader-icon"><Plus /></el-icon>
+                  </el-upload>
+                  <el-input v-model="settings[`feature_${feat}_content_value`]" placeholder="或输入视频URL" class="content-url-input" />
+                </div>
+                <!-- 下载文件上传 -->
+                <div v-else-if="settings[`feature_${feat}_content_type`] === 'download'" class="content-upload-row">
+                  <el-upload
+                    class="content-uploader"
+                    action="/api/admin/upload"
+                    :show-file-list="false"
+                    :on-success="(res) => handleContentUpload(feat, res)"
+                    :before-upload="beforeFileUpload"
+                  >
+                    <div v-if="settings[`feature_${feat}_content_value`]" class="file-info">
+                      <el-icon><Document /></el-icon>
+                      <span>{{ getFileName(settings[`feature_${feat}_content_value`]) }}</span>
+                    </div>
+                    <el-icon v-else class="content-uploader-icon"><Plus /></el-icon>
+                  </el-upload>
+                  <el-input v-model="settings[`feature_${feat}_content_value`]" placeholder="或输入下载链接" class="content-url-input" />
+                </div>
+              </el-form-item>
+              <el-form-item label="内容值" v-if="settings[`feature_${feat}_content_type`] === 'text'">
                 <el-input
                   v-model="settings[`feature_${feat}_content_value`]"
-                  :placeholder="getContentPlaceholder(settings[`feature_${feat}_content_type`])"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="输入显示的文本内容"
                 />
               </el-form-item>
             </el-form>
@@ -138,12 +203,38 @@
           </template>
           <el-form label-position="top">
             <el-form-item label="微信收款码">
-              <el-input v-model="settings.wechat_qrcode" placeholder="输入微信收款码图片URL" />
-              <div class="field-hint">客户扫码后付款到您的微信账户</div>
+              <div class="qrcode-upload-row">
+                <el-upload
+                  class="qrcode-uploader"
+                  action="/api/admin/upload"
+                  :show-file-list="false"
+                  :on-success="(res) => handleQrcodeUpload('wechat_qrcode', res)"
+                  :before-upload="beforeUpload"
+                  accept="image/*"
+                >
+                  <img v-if="settings.wechat_qrcode" :src="settings.wechat_qrcode" class="qrcode-preview" />
+                  <el-icon v-else class="qrcode-uploader-icon"><Plus /></el-icon>
+                </el-upload>
+                <el-input v-model="settings.wechat_qrcode" placeholder="或输入图片URL" class="qrcode-url-input" />
+              </div>
+              <div class="field-hint">上传您的微信收款二维码图片</div>
             </el-form-item>
             <el-form-item label="支付宝收款码">
-              <el-input v-model="settings.alipay_qrcode" placeholder="输入支付宝收款码图片URL" />
-              <div class="field-hint">客户扫码后付款到您的支付宝账户</div>
+              <div class="qrcode-upload-row">
+                <el-upload
+                  class="qrcode-uploader"
+                  action="/api/admin/upload"
+                  :show-file-list="false"
+                  :on-success="(res) => handleQrcodeUpload('alipay_qrcode', res)"
+                  :before-upload="beforeUpload"
+                  accept="image/*"
+                >
+                  <img v-if="settings.alipay_qrcode" :src="settings.alipay_qrcode" class="qrcode-preview" />
+                  <el-icon v-else class="qrcode-uploader-icon"><Plus /></el-icon>
+                </el-upload>
+                <el-input v-model="settings.alipay_qrcode" placeholder="或输入图片URL" class="qrcode-url-input" />
+              </div>
+              <div class="field-hint">上传您的支付宝收款二维码图片</div>
             </el-form-item>
           </el-form>
         </el-card>
@@ -192,7 +283,7 @@
 import { ref, onMounted } from 'vue'
 import AdminLayout from '@/components/AdminLayout.vue'
 import { ElMessage } from 'element-plus'
-import { Trophy, Star, Service, Coin, Position, InfoFilled, Picture, Grid, Document, Check } from '@element-plus/icons-vue'
+import { Trophy, Star, Service, Coin, Position, InfoFilled, Picture, Grid, Document, Check, Plus } from '@element-plus/icons-vue'
 import { getAdminSiteSettings, updateSiteSettings } from '@/api/config'
 import { refreshSiteName } from '@/router/index.js'
 
@@ -266,6 +357,95 @@ const saveSettings = async () => {
     saving.value = false
   }
 }
+
+// 上传后自动保存到数据库（确保缩略图可用）
+const autoSaveAfterUpload = async (field, value) => {
+  settings.value[field] = value
+  try {
+    await updateSiteSettings(settings.value)
+  } catch (e) {
+    console.error('自动保存失败', e)
+  }
+}
+
+// 二维码上传相关
+const handleQrcodeUpload = (field, response) => {
+  if (response.code === 200) {
+    autoSaveAfterUpload(field, response.data.url)
+    ElMessage.success('上传成功')
+  } else {
+    ElMessage.error(response.message || '上传失败')
+  }
+}
+
+// 图标上传
+const handleIconUpload = (feat, response) => {
+  if (response.code === 200) {
+    autoSaveAfterUpload(`feature_${feat}_icon_url`, response.data.url)
+    ElMessage.success('上传成功')
+  } else {
+    ElMessage.error(response.message || '上传失败')
+  }
+}
+
+// 内容上传
+const handleContentUpload = (feat, response) => {
+  if (response.code === 200) {
+    autoSaveAfterUpload(`feature_${feat}_content_value`, response.data.url)
+    ElMessage.success('上传成功')
+  } else {
+    ElMessage.error(response.message || '上传失败')
+  }
+}
+
+// 获取文件名
+const getFileName = (url) => {
+  if (!url) return ''
+  return url.split('/').pop() || url
+}
+
+// 图片上传验证
+const beforeImageUpload = (file) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt10M = file.size / 1024 / 1024 < 10
+
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件')
+    return false
+  }
+  if (!isLt10M) {
+    ElMessage.error('图片大小不能超过 10MB')
+    return false
+  }
+  return true
+}
+
+// 视频上传验证
+const beforeVideoUpload = (file) => {
+  const isVideo = file.type.startsWith('video/')
+  const isLt100M = file.size / 1024 / 1024 < 100
+
+  if (!isVideo) {
+    ElMessage.error('只能上传视频文件')
+    return false
+  }
+  if (!isLt100M) {
+    ElMessage.error('视频大小不能超过 100MB')
+    return false
+  }
+  return true
+}
+
+// 文件上传验证
+const beforeFileUpload = (file) => {
+  const isLt50M = file.size / 1024 / 1024 < 50
+
+  if (!isLt50M) {
+    ElMessage.error('文件大小不能超过 50MB')
+    return false
+  }
+  return true
+}
 </script>
 
 <style scoped>
@@ -338,6 +518,156 @@ const saveSettings = async () => {
 
 .save-bar {
   padding: 20px 0;
+}
+
+/* 二维码上传样式 */
+.qrcode-upload-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.qrcode-uploader {
+  flex-shrink: 0;
+}
+
+.qrcode-uploader :deep(.el-upload) {
+  border: 1px dashed #dcdfe6;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.qrcode-uploader :deep(.el-upload:hover) {
+  border-color: #409eff;
+}
+
+.qrcode-preview {
+  width: 120px;
+  height: 120px;
+  display: block;
+  object-fit: contain;
+}
+
+.qrcode-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qrcode-url-input {
+  flex: 1;
+}
+
+/* 图标上传样式 */
+.icon-upload-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.icon-uploader {
+  flex-shrink: 0;
+}
+
+.icon-uploader :deep(.el-upload) {
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.icon-uploader :deep(.el-upload:hover) {
+  border-color: #409eff;
+}
+
+.icon-preview {
+  width: 60px;
+  height: 60px;
+  display: block;
+  object-fit: contain;
+}
+
+.icon-uploader-icon {
+  font-size: 20px;
+  color: #8c939d;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-url-input {
+  flex: 1;
+}
+
+/* 内容上传样式 */
+.content-upload-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.content-uploader {
+  flex-shrink: 0;
+}
+
+.content-uploader :deep(.el-upload) {
+  border: 1px dashed #dcdfe6;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.content-uploader :deep(.el-upload:hover) {
+  border-color: #409eff;
+}
+
+.content-preview {
+  width: 120px;
+  height: 120px;
+  display: block;
+  object-fit: contain;
+}
+
+.content-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.content-url-input {
+  flex: 1;
+}
+
+.file-info {
+  width: 120px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #606266;
+  font-size: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
 }
 
 /* Preview Panel */

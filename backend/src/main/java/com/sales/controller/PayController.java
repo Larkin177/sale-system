@@ -5,9 +5,11 @@ import com.sales.dto.ApiResponse;
 import com.sales.dto.CreateOrderRequest;
 import com.sales.entity.Order;
 import com.sales.entity.Product;
+import com.sales.entity.ProductPackage;
 import com.sales.entity.Sales;
 import com.sales.entity.SystemConfig;
 import com.sales.mapper.OrderMapper;
+import com.sales.mapper.ProductPackageMapper;
 import com.sales.mapper.SystemConfigMapper;
 import com.sales.service.AlipayService;
 import com.sales.service.OrderService;
@@ -36,6 +38,7 @@ public class PayController {
     private final AlipayService alipayService;
     private final OrderMapper orderMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final ProductPackageMapper productPackageMapper;
 
     /**
      * 获取当前支付模式配置
@@ -64,24 +67,13 @@ public class PayController {
 
     @PostMapping("/create")
     public ApiResponse<Map<String, Object>> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        // 基础金额校验
-        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            return ApiResponse.error("金额必须大于0");
+        // 根据 packageId 获取套餐信息和价格
+        ProductPackage pkg = productPackageMapper.selectById(request.getPackageId());
+        if (pkg == null || !"active".equals(pkg.getStatus())) {
+            return ApiResponse.error("套餐不存在或已下架");
         }
 
-        // 校验金额是否在产品价格范围内
-        ApiResponse<com.baomidou.mybatisplus.extension.plugins.pagination.Page<Product>> productResp =
-                productService.listProducts(1, 1);
-        if (productResp.getData() != null && productResp.getData().getRecords() != null
-                && !productResp.getData().getRecords().isEmpty()) {
-            Product product = productResp.getData().getRecords().get(0);
-            if (product.getMinPrice() != null && request.getAmount().compareTo(product.getMinPrice()) < 0) {
-                return ApiResponse.error("金额不能低于最低价格" + product.getMinPrice());
-            }
-            if (product.getMaxPrice() != null && request.getAmount().compareTo(product.getMaxPrice()) > 0) {
-                return ApiResponse.error("金额不能超过最高价格" + product.getMaxPrice());
-            }
-        }
+        BigDecimal amount = pkg.getPrice();
 
         // 根据销售码获取销售ID
         Long salesId = null;
@@ -92,12 +84,12 @@ public class PayController {
             }
         }
 
-        // 创建订单
-        Order order = orderService.createOrder(salesId, request.getAmount());
+        // 创建订单（带套餐信息）
+        Order order = orderService.createOrderWithPackage(salesId, amount, pkg);
 
         // 保存客户价格记忆
         if (request.getPhone() != null && !request.getPhone().isEmpty()) {
-            orderService.saveCustomerPrice(request.getPhone(), request.getAmount(), salesId, order.getOrderNo());
+            orderService.saveCustomerPrice(request.getPhone(), amount, salesId, order.getOrderNo());
         }
 
         // 获取静态支付二维码
@@ -110,8 +102,8 @@ public class PayController {
         if ("api".equals(alipayMode)) {
             Map<String, String> alipayResult = alipayService.createQrCode(
                     order.getOrderNo(),
-                    order.getAmount().toString(),
-                    "CC-Installer - " + order.getOrderNo()
+                    amount.toString(),
+                    pkg.getName() + " - " + order.getOrderNo()
             );
             if (alipayResult != null) {
                 alipayQrCode = alipayResult.getOrDefault("qrCode", "");
@@ -121,7 +113,9 @@ public class PayController {
         // 返回订单信息 + 支付模式
         Map<String, Object> result = new HashMap<>();
         result.put("orderNo", order.getOrderNo());
-        result.put("amount", order.getAmount());
+        result.put("amount", amount);
+        result.put("packageName", pkg.getName());
+        result.put("platform", pkg.getPlatform());
         result.put("message", "订单创建成功，请完成支付");
         result.put("wechatQrcode", wechatQrcode != null ? wechatQrcode : "");
         result.put("alipayQrcode", alipayQrcode != null ? alipayQrcode : "");

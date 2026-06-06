@@ -35,7 +35,8 @@ public class AuthFilter implements Filter {
         "/api/verification/",
         "/api/captcha/",
         "/api/alipay/",
-        "/api/webhook/"
+        "/api/webhook/",
+        "/api/products/"
     };
 
     @Override

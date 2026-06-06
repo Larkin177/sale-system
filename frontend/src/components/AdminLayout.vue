@@ -37,6 +37,10 @@
             <el-icon><List /></el-icon>
             <span>订单管理</span>
           </el-menu-item>
+          <el-menu-item index="/admin/packages">
+            <el-icon><Goods /></el-icon>
+            <span>套餐管理</span>
+          </el-menu-item>
           <el-menu-item index="/admin/settle">
             <el-icon><Money /></el-icon>
             <span>分润结算</span>
@@ -64,7 +68,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getSiteSettings } from '@/api/config'
-import { User, ArrowDown, SwitchButton, DataAnalysis, List, Money, Setting } from '@element-plus/icons-vue'
+import { User, ArrowDown, SwitchButton, DataAnalysis, List, Money, Setting, Goods } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()

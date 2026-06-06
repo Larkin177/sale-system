@@ -1,7 +1,16 @@
 server:
   port: 8080
 
+# 文件上传配置
+upload:
+  dir: E:/DevEnv/project/sales-system/uploads
+
 spring:
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
   datasource:
     url: jdbc:mysql://localhost:3308/sales_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root

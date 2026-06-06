@@ -6,6 +6,7 @@ import com.sales.dto.ApiResponse;
 import com.sales.dto.ClaimOrderRequest;
 import com.sales.entity.CustomerPrice;
 import com.sales.entity.Order;
+import com.sales.entity.ProductPackage;
 import com.sales.entity.Sales;
 import com.sales.mapper.CustomerPriceMapper;
 import com.sales.mapper.OrderMapper;
@@ -36,6 +37,23 @@ public class OrderService {
         order.setAmount(baseAmount);
         order.setBaseAmount(baseAmount);
         order.setSalesId(salesId);
+        order.setStatus("pending");
+        orderMapper.insert(order);
+        return order;
+    }
+
+    /**
+     * 创建订单（带套餐信息）
+     */
+    public Order createOrderWithPackage(Long salesId, BigDecimal amount, ProductPackage pkg) {
+        Order order = new Order();
+        order.setOrderNo(generateOrderNo());
+        order.setAmount(amount);
+        order.setBaseAmount(amount);
+        order.setSalesId(salesId);
+        order.setProductId(pkg.getProductId());
+        order.setPackageName(pkg.getName());
+        order.setPlatform(pkg.getPlatform());
         order.setStatus("pending");
         orderMapper.insert(order);
         return order;

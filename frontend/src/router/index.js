@@ -127,6 +127,12 @@ const routes = [
     name: 'SiteSettings',
     component: () => import('../views/admin/SiteSettings.vue'),
     meta: { requiresAuth: true, role: 'admin' }
+  },
+  {
+    path: '/admin/packages',
+    name: 'AdminPackages',
+    component: () => import('../views/admin/Packages.vue'),
+    meta: { requiresAuth: true, role: 'admin' }
   }
 ]
 

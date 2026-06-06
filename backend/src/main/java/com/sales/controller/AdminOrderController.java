@@ -4,9 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sales.dto.ApiResponse;
 import com.sales.entity.Order;
+import com.sales.entity.ProductPackage;
 import com.sales.mapper.OrderMapper;
-import com.sales.entity.Product;
 import com.sales.mapper.ProductMapper;
+import com.sales.mapper.ProductPackageMapper;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
 import com.sales.service.ConfigService;
@@ -29,6 +30,7 @@ public class AdminOrderController {
     private final OrderService orderService;
     private final OrderMapper orderMapper;
     private final ProductMapper productMapper;
+    private final ProductPackageMapper productPackageMapper;
     private final CommissionService commissionService;
     private final AuthCodeService authCodeService;
     private final ConfigService configService;
@@ -159,20 +161,21 @@ public class AdminOrderController {
      */
     private void autoDeliver(Order order) {
         try {
-            // 如果订单没有产品ID，使用默认产品
-            if (order.getProductId() == null) {
-                order.setProductId(1L);
+            // 根据订单的 package_id 获取套餐信息
+            ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
+
+            // 如果订单没有产品ID，从套餐获取
+            if (order.getProductId() == null && pkg != null) {
+                order.setProductId(pkg.getProductId());
             }
 
-            // 获取产品配置
-            int validityHours = 72;
-            String productName = "CC-Installer";
-            Product product = productMapper.selectById(order.getProductId());
-            if (product != null) {
-                if (product.getAuthValidityHours() != null) {
-                    validityHours = product.getAuthValidityHours();
-                }
-                productName = product.getName();
+            // 获取授权有效期（优先使用套餐配置）
+            int validityHours = pkg != null && pkg.getAuthValidityHours() != null ? pkg.getAuthValidityHours() : 72;
+
+            // 产品名称
+            String productName = order.getProductName();
+            if (productName == null && pkg != null) {
+                productName = pkg.getName();
                 order.setProductName(productName);
             }
 
@@ -185,6 +188,12 @@ public class AdminOrderController {
             order.setStatus("delivered");
             orderMapper.updateById(order);
 
+            // 获取下载链接（优先使用套餐配置的链接）
+            String downloadUrl = "";
+            if (pkg != null && pkg.getDownloadUrl() != null && !pkg.getDownloadUrl().isEmpty()) {
+                downloadUrl = pkg.getDownloadUrl();
+            }
+
             // 构建发货消息
             String template = configService.getConfig("delivery_template");
             if (template == null || template.isEmpty()) {
@@ -192,10 +201,6 @@ public class AdminOrderController {
             }
 
             String siteName = siteSettingService.getSetting("site_name");
-            String downloadUrl = siteSettingService.getSetting("site_url");
-            if (downloadUrl == null || downloadUrl.isEmpty()) {
-                downloadUrl = "http://localhost:3000";
-            }
 
             String message = template
                     .replace("{site_name}", siteName != null ? siteName : "系统")
@@ -203,11 +208,15 @@ public class AdminOrderController {
                     .replace("{amount}", order.getAmount().toString())
                     .replace("{phone}", order.getCustomerPhone() != null ? order.getCustomerPhone() : "")
                     .replace("{download_url}", downloadUrl)
-                    .replace("{auth_code}", authCode);
+                    .replace("{auth_code}", authCode)
+                    .replace("{product_name}", productName != null ? productName : "")
+                    .replace("{package_name}", order.getPackageName() != null ? order.getPackageName() : "")
+                    .replace("{platform}", order.getPlatform() != null ? order.getPlatform() : "")
+                    .replace("{version}", pkg != null && pkg.getVersion() != null ? pkg.getVersion() : "");
 
             // 发送短信（开发环境仅打印日志）
-            log.info("[自动发货] 订单: {}, 手机: {}, 授权码: {}",
-                    order.getOrderNo(), order.getCustomerPhone(), authCode);
+            log.info("[自动发货] 订单: {}, 手机: {}, 套餐: {}, 授权码: {}",
+                    order.getOrderNo(), order.getCustomerPhone(), order.getPackageName(), authCode);
             log.info("[自动发货] 短信内容: {}", message);
 
         } catch (Exception e) {

@@ -29,6 +29,9 @@ logs/
 # Docker
 docker-compose.override.yml
 
+# Uploads
+uploads/
+
 # Environment
 .env
 .env.local

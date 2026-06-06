@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="pay-page" v-loading="pageLoading">
     <!-- Hero Section -->
     <div
@@ -12,7 +12,7 @@
       <div class="hero-content">
         <h1 class="hero-title">{{ siteSettings.hero_title || '专业软件工具' }}</h1>
         <p class="hero-subtitle">{{ siteSettings.hero_subtitle || '高效、稳定、安全的解决方案' }}</p>
-        <el-button type="primary" size="large" class="hero-btn" @click="openPayModal">
+        <el-button type="primary" size="large" class="hero-btn" @click="showPayModal = true">
           立即购买
         </el-button>
       </div>
@@ -64,13 +64,18 @@
       <template #header>
         <div class="pay-dialog-header">
           <div class="pay-dialog-steps">
-            <div class="step-indicator" :class="{ active: payStep === 1, done: payStep === 2 }">
+            <div class="step-indicator" :class="{ active: payStep === 1, done: payStep > 1 }">
               <span class="step-num">1</span>
               <span class="step-label">验证手机</span>
             </div>
-            <div class="step-line" :class="{ active: payStep === 2 }"></div>
-            <div class="step-indicator" :class="{ active: payStep === 2 }">
+            <div class="step-line" :class="{ active: payStep > 1 }"></div>
+            <div class="step-indicator" :class="{ active: payStep === 2, done: payStep > 2 }">
               <span class="step-num">2</span>
+              <span class="step-label">选择套餐</span>
+            </div>
+            <div class="step-line" :class="{ active: payStep > 2 }"></div>
+            <div class="step-indicator" :class="{ active: payStep === 3 }">
+              <span class="step-num">3</span>
               <span class="step-label">确认支付</span>
             </div>
           </div>
@@ -78,8 +83,8 @@
       </template>
 
       <div class="pay-dialog-body">
-        <!-- Step 1: Phone Input -->
         <transition name="step-fade" mode="out-in">
+          <!-- Step 1: Phone Input -->
           <div v-if="payStep === 1" key="step1" class="pay-step">
             <h3 class="step-title">请输入您的手机号码</h3>
 
@@ -100,7 +105,7 @@
               />
             </div>
 
-            <!-- 图形验证码 -->
+            <!-- CAPTCHA -->
             <div class="captcha-section" v-if="phoneInput.length === 11 && !codeSent">
               <div class="captcha-row">
                 <el-input
@@ -118,7 +123,7 @@
               </div>
             </div>
 
-            <!-- 验证码 -->
+            <!-- Verification Code -->
             <div class="code-section" v-if="codeSent || phoneInput.length === 11">
               <div class="code-input-row">
                 <el-input
@@ -153,9 +158,46 @@
             </el-button>
           </div>
 
-          <!-- Step 2: Payment -->
-          <div v-else key="step2" class="pay-step">
-            <!-- Step 2: Payment form (before order creation) -->
+          <!-- Step 2: Select Package -->
+          <div v-else-if="payStep === 2" key="step2-select" class="pay-step">
+            <h3 class="step-title">选择您的套餐</h3>
+
+            <!-- Platform Tabs -->
+            <div class="modal-platform-tabs" v-if="platforms.length > 1">
+              <div v-for="p in platforms" :key="p"
+                   class="modal-platform-tab"
+                   :class="{ active: selectedPlatform === p }"
+                   @click="selectedPlatform = p; loadPackages()">
+                {{ p === 'mac' ? 'Mac' : p === 'windows' ? 'Windows' : '全平台' }}
+              </div>
+            </div>
+
+            <!-- Package List -->
+            <div class="modal-packages" v-if="packages.length > 0">
+              <div v-for="pkg in packages" :key="pkg.id"
+                   class="modal-package-item"
+                   :class="{ active: selectedPackage?.id === pkg.id }"
+                   @click="selectedPackage = pkg; price = pkg.price">
+                <div class="modal-pkg-info">
+                  <div class="modal-pkg-name">{{ pkg.name }}</div>
+                  <div class="modal-pkg-desc" v-if="pkg.description">{{ pkg.description }}</div>
+                </div>
+                <div class="modal-pkg-price">¥{{ pkg.price }}</div>
+              </div>
+            </div>
+            <div v-else class="no-packages-modal">
+              <el-empty description="暂无可用套餐" :image-size="60" />
+            </div>
+
+            <el-button type="primary" size="large" class="pay-submit-btn"
+                       :disabled="!selectedPackage" @click="goToStep3">
+              下一步
+            </el-button>
+          </div>
+
+          <!-- Step 3: Confirm Payment -->
+          <div v-else-if="payStep === 3" key="step3" class="pay-step">
+            <!-- Payment form (before order creation) -->
             <div v-if="!showQrCode" class="payment-form-view">
               <h3 class="step-title" v-if="phoneHistory">
                 检测到您之前的购买记录，以下为您专属的价格
@@ -208,7 +250,7 @@
               </el-button>
             </div>
 
-            <!-- Step 2: QR code display (after order creation) -->
+            <!-- QR code display (after order creation) -->
             <div v-if="showQrCode" class="payment-qr-view">
               <div class="qr-header">
                 <el-tag type="success" effect="dark">订单已创建</el-tag>
@@ -244,7 +286,7 @@
       </div>
     </el-dialog>
 
-    <!-- Feature Modal (separate from payment) -->
+    <!-- Feature Modal -->
     <el-dialog
       v-model="showFeatureModal"
       :title="modalFeature?.title"
@@ -275,23 +317,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Wallet, Phone, Trophy, Star, Service, Coin, Position, Download, Message } from '@element-plus/icons-vue'
+import { ChatDotRound, Wallet, Phone, Trophy, Star, Service, Coin, Position, Download, Message, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
-import { getCustomerLastOrder, sendVerificationCode as sendVerificationCodeAPI, verifyCode as verifyCodeAPI, generateCaptcha as generateCaptchaAPI, verifyCaptcha as verifyCaptchaAPI, getPaymentQrCode as getPaymentQrCodeAPI, getCustomerPrice as getCustomerPriceAPI } from '@/api/config'
+import { getCustomerLastOrder, sendVerificationCode as sendVerificationCodeAPI, verifyCode as verifyCodeAPI, generateCaptcha as generateCaptchaAPI, verifyCaptcha as verifyCaptchaAPI, getCustomerPrice as getCustomerPriceAPI } from '@/api/config'
 
 const route = useRoute()
 const salesCode = ref(route.query.s || '')
 const customPrice = ref(route.query.p ? parseInt(route.query.p) : null)
+const pkgId = ref(route.query.pkg ? parseInt(route.query.pkg) : null)
 const basePrice = ref(99)
 const price = ref(99)
-const minPrice = ref(80)
-const maxPrice = ref(150)
 const paymentMethod = ref('wechat')
 const loading = ref(false)
 const pageLoading = ref(true)
+const fromSalesLink = computed(() => !!pkgId.value)
 
 // Payment modal state
 const showPayModal = ref(false)
@@ -316,6 +358,15 @@ const orderNo = ref('')
 const wechatPayMode = ref('static')
 const alipayPayMode = ref('static')
 const isStaticMode = ref(true)
+
+// Platform and package state
+const selectedPlatform = ref('')
+const platforms = ref([])
+const packages = ref([])
+const selectedPackage = ref(null)
+const productPageTitle = ref('选择您的产品')
+const productPageSubtitle = ref('请选择平台和套餐')
+const productPageTips = ref('')
 
 // Load CAPTCHA when phone number reaches 11 digits
 watch(phoneInput, (val) => {
@@ -395,20 +446,49 @@ const maskedPhone = computed(() => {
   return p
 })
 
-const openPayModal = () => {
-  showPayModal.value = true
+// Load platforms
+const loadPlatforms = async () => {
+  try {
+    const res = await request.get('/products/1/platforms')
+    platforms.value = res.data || []
+    if (platforms.value.length > 0) {
+      selectedPlatform.value = platforms.value[0]
+      loadPackages()
+    }
+  } catch (e) {
+    console.error('Failed to load platforms', e)
+  }
+}
+
+// Load packages by platform
+const loadPackages = async () => {
+  if (!selectedPlatform.value) return
+  try {
+    const res = await request.get('/products/1/packages', { params: { platform: selectedPlatform.value } })
+    packages.value = res.data || []
+  } catch (e) {
+    console.error('Failed to load packages', e)
+    packages.value = []
+  }
 }
 
 const goBackToStep1 = () => {
   payStep.value = 1
+  selectedPackage.value = null
   phoneHistory.value = null
   verificationCode.value = ''
   captchaAnswer.value = ''
-  // 倒计时延续，不重置
-  // 重新加载验证码
   if (phoneInput.value.length === 11) {
     loadCaptcha()
   }
+}
+
+const goToStep3 = () => {
+  if (!selectedPackage.value) {
+    ElMessage.warning('请选择一个套餐')
+    return
+  }
+  payStep.value = 3
 }
 
 const loadCaptcha = async () => {
@@ -439,7 +519,6 @@ const downloadFile = (url) => {
 
 // Send verification code
 let countdownTimer = null
-// 手机号格式校验
 const isValidPhone = (phone) => /^1[3-9]\d{9}$/.test(phone)
 
 const sendCode = async () => {
@@ -458,7 +537,7 @@ const sendCode = async () => {
     await verifyCaptchaAPI(captchaId.value, captchaAnswer.value)
   } catch (e) {
     ElMessage.error(e.response?.data?.message || '验证码错误')
-    loadCaptcha() // refresh captcha
+    loadCaptcha()
     captchaAnswer.value = ''
     return
   }
@@ -504,31 +583,39 @@ const checkPhone = async () => {
     return
   }
 
-  // Then check customer price (priority: customer_prices > order history)
+  // Then check customer price
   phoneLoading.value = true
   try {
-    // First check customer_prices table
     const priceRes = await getCustomerPriceAPI(phoneInput.value)
     if (priceRes?.data?.price) {
       phoneHistory.value = { amount: priceRes.data.price }
       price.value = priceRes.data.price
     } else {
-      // No remembered price, check order history
       const res = await getCustomerLastOrder(phoneInput.value)
       if (res?.data?.amount) {
         phoneHistory.value = res.data
         price.value = res.data.amount
       } else {
         phoneHistory.value = null
-        // Use base price or sales link price
-        price.value = customPrice.value || basePrice.value
+        price.value = selectedPackage.value?.price || customPrice.value || basePrice.value
       }
     }
-    payStep.value = 2
+    // 如果来自销售链接（已有套餐选择），直接跳到支付步骤
+    if (fromSalesLink.value && selectedPackage.value) {
+      payStep.value = 3
+    } else {
+      payStep.value = 2
+      await loadPlatforms()
+    }
   } catch (e) {
     phoneHistory.value = null
-    price.value = customPrice.value || basePrice.value
-    payStep.value = 2
+    price.value = selectedPackage.value?.price || customPrice.value || basePrice.value
+    if (fromSalesLink.value && selectedPackage.value) {
+      payStep.value = 3
+    } else {
+      payStep.value = 2
+      await loadPlatforms()
+    }
   } finally {
     phoneLoading.value = false
     codeVerifying.value = false
@@ -544,10 +631,11 @@ onMounted(async () => {
 
     if (configRes.status === 'fulfilled' && configRes.value?.data) {
       const data = configRes.value.data
-      minPrice.value = parseInt(data.min_price) || 80
-      maxPrice.value = parseInt(data.max_price) || 150
       basePrice.value = parseInt(data.base_price) || 99
       price.value = basePrice.value
+      productPageTitle.value = data.product_page_title || '选择您的产品'
+      productPageSubtitle.value = data.product_page_subtitle || '请选择平台和套餐'
+      productPageTips.value = data.product_page_tips || ''
     }
 
     if (settingsRes.status === 'fulfilled' && settingsRes.value?.data) {
@@ -558,10 +646,26 @@ onMounted(async () => {
   } catch (e) {
     console.error('Failed to load config', e)
   } finally {
+    // 如果是销售链接（带 pkg 参数），自动加载套餐信息
+    if (pkgId.value) {
+      try {
+        const pkgRes = await request.get(`/products/1/packages?platform=`)
+        const allPkgs = pkgRes.data || []
+        const pkg = allPkgs.find(p => p.id === pkgId.value)
+        if (pkg) {
+          selectedPackage.value = pkg
+          selectedPlatform.value = pkg.platform
+          price.value = customPrice.value || pkg.price
+          platforms.value = [...new Set(allPkgs.map(p => p.platform))]
+        }
+      } catch (e) {
+        console.error('Failed to load package', e)
+      }
+    }
     pageLoading.value = false
-    // 从首页跳转过来时自动弹出支付弹窗
     if (route.query.auto === '1') {
-      openPayModal()
+      await nextTick()
+      showPayModal.value = true
     }
   }
 })
@@ -575,7 +679,7 @@ const handlePay = async () => {
   loading.value = true
   try {
     const res = await request.post('/pay/create', {
-      amount: price.value,
+      packageId: selectedPackage.value?.id,
       salesCode: salesCode.value,
       phone: phoneInput.value,
       paymentMethod: paymentMethod.value
@@ -587,18 +691,16 @@ const handlePay = async () => {
     // Capture payment modes
     wechatPayMode.value = res.data.wechatMode || 'static'
     alipayPayMode.value = res.data.alipayMode || 'static'
-    isStaticMode.value = paymentMethod.value === 'wechat' 
-      ? wechatPayMode.value === 'static' 
+    isStaticMode.value = paymentMethod.value === 'wechat'
+      ? wechatPayMode.value === 'static'
       : alipayPayMode.value === 'static'
 
-    // 优先使用支付宝动态二维码（从订单创建接口返回）
+    // QR code priority
     if (res.data.alipayQrCode) {
       qrCodeImage.value = res.data.alipayQrCode
     } else if (res.data.wechatQrcode && paymentMethod.value === 'wechat') {
-      // 微信用管理端配置的静态二维码
       qrCodeImage.value = res.data.wechatQrcode
     } else if (res.data.alipayQrcode && paymentMethod.value === 'alipay') {
-      // 支付宝降级用管理端配置的静态二维码
       qrCodeImage.value = res.data.alipayQrcode
     }
     showQrCode.value = true
@@ -612,7 +714,6 @@ const handlePay = async () => {
 // Handle paid confirmation
 const handlePaid = async () => {
   if (isStaticMode.value) {
-    // Static mode: submit to admin for review
     try {
       await request.post('/pay/mark-paid', { orderNo: orderNo.value })
       ElMessage.success('支付确认已提交，请等待管理员审核后自动发货')
@@ -632,11 +733,11 @@ const handlePaid = async () => {
   captchaAnswer.value = ''
   phoneHistory.value = null
   orderNo.value = ''
-  paidSubmitted.value = false
   qrCodeImage.value = ''
   codeSent.value = false
   captchaId.value = ''
   captchaImage.value = ''
+  selectedPackage.value = null
 }
 </script>
 
@@ -711,7 +812,7 @@ const handlePaid = async () => {
 
 /* Features Section */
 .features-section {
-  padding: 80px 24px;
+  padding: 60px 24px 80px;
   background: #f8f9fc;
 }
 
@@ -776,7 +877,6 @@ const handlePaid = async () => {
 /* Payment Modal Styles */
 /* ==================== */
 
-/* Gradient overlay behind the dialog */
 .pay-dialog :deep(.el-overlay) {
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(30, 30, 60, 0.7) 100%) !important;
 }
@@ -803,7 +903,6 @@ const handlePaid = async () => {
   display: none;
 }
 
-/* Step indicators in dialog header */
 .pay-dialog-header {
   padding-bottom: 8px;
 }
@@ -878,7 +977,6 @@ const handlePaid = async () => {
   background: linear-gradient(90deg, #10b981, #667eea);
 }
 
-/* Dialog body */
 .pay-dialog-body {
   min-height: 240px;
 }
@@ -1023,6 +1121,89 @@ const handlePaid = async () => {
 .captcha-loading {
   font-size: 12px;
   color: #909399;
+}
+
+/* Modal Platform Tabs */
+.modal-platform-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+
+.modal-platform-tab {
+  padding: 8px 20px;
+  border: 2px solid #e4e7ed;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.modal-platform-tab.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.modal-platform-tab:hover {
+  border-color: #409eff;
+}
+
+/* Modal Package List */
+.modal-packages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.modal-package-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border: 2px solid #e4e7ed;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-package-item:hover {
+  border-color: #409eff;
+  background: #f5f7fa;
+}
+
+.modal-package-item.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.modal-pkg-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1a1a2e;
+}
+
+.modal-pkg-desc {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+.modal-pkg-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f56c6c;
+  white-space: nowrap;
+}
+
+.no-packages-modal {
+  padding: 20px 0;
+  text-align: center;
 }
 
 /* Price display */
