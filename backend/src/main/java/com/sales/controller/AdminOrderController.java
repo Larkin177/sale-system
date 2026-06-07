@@ -5,12 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sales.dto.ApiResponse;
 import com.sales.entity.Order;
 import com.sales.entity.ProductPackage;
+import com.sales.entity.SystemConfig;
 import com.sales.mapper.OrderMapper;
 import com.sales.mapper.ProductMapper;
+import com.sales.mapper.SystemConfigMapper;
 import com.sales.mapper.ProductPackageMapper;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
 import com.sales.service.ConfigService;
+import com.sales.service.EmailService;
 import com.sales.service.OrderService;
 import com.sales.service.SiteSettingService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +38,8 @@ public class AdminOrderController {
     private final AuthCodeService authCodeService;
     private final ConfigService configService;
     private final SiteSettingService siteSettingService;
+    private final EmailService emailService;
+    private final SystemConfigMapper systemConfigMapper;
 
     @GetMapping
     public ApiResponse<Page<Order>> list(
@@ -222,5 +227,29 @@ public class AdminOrderController {
         } catch (Exception e) {
             log.error("自动发货失败 - 订单: {}", order.getOrderNo(), e);
         }
+    }
+
+    private void sendDeliveryEmail(Order order) {
+        String email = order.getCustomerEmail();
+        if (email == null || email.isEmpty()) return;
+
+        String siteUrl = "http://localhost:3000";
+        SystemConfig sc = systemConfigMapper.selectOne(
+                new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, "site_url"));
+        if (sc != null && sc.getConfigValue() != null && !sc.getConfigValue().isEmpty()) {
+            siteUrl = sc.getConfigValue();
+        }
+
+        String content = "Order " + order.getOrderNo() + " is ready. Visit " + siteUrl + " to get your auth code.";
+        if (order.getPackageId() != null) {
+            ProductPackage pp = productPackageMapper.selectById(order.getPackageId());
+            if (pp != null && pp.getEmailTemplate() != null && !pp.getEmailTemplate().isEmpty()) {
+                content = pp.getEmailTemplate();
+                content = content.replace("SITE_URL", siteUrl);
+                content = content.replace("ORDER_NO", order.getOrderNo());
+            }
+        }
+
+        emailService.sendEmail(email, "CC-Installer: Your order is ready!", content);
     }
 }

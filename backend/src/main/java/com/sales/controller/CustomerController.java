@@ -1,39 +1,43 @@
 package com.sales.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sales.dto.ApiResponse;
-import com.sales.service.OrderService;
+import com.sales.entity.Order;
+import com.sales.mapper.OrderMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
 public class CustomerController {
 
-    private final OrderService orderService;
+    private final OrderMapper orderMapper;
 
-    @GetMapping("/api/customer/last-order")
-    public ApiResponse<Map<String, Object>> getLastOrder(@RequestParam String phone) {
-        Map<String, Object> lastOrder = orderService.getCustomerLastOrder(phone);
-        if (lastOrder == null) {
-            Map<String, Object> empty = new HashMap<>();
-            empty.put("amount", null);
-            return ApiResponse.success(empty);
-        }
-        return ApiResponse.success(lastOrder);
-    }
+    @GetMapping("/api/customer/orders")
+    public ApiResponse<List<Map<String, Object>>> getOrders(@RequestParam String email) {
+        List<Order> orders = orderMapper.selectList(
+                new LambdaQueryWrapper<Order>()
+                        .eq(Order::getCustomerEmail, email)
+                        .orderByDesc(Order::getCreatedAt));
 
-    @GetMapping("/api/customer/price")
-    public ApiResponse<Map<String, Object>> getCustomerPrice(@RequestParam String phone) {
-        // Look up customer_prices for this phone (most recent)
-        Map<String, Object> priceRecord = orderService.getCustomerPrice(phone);
-        if (priceRecord == null) {
-            Map<String, Object> empty = new HashMap<>();
-            empty.put("price", null);
-            return ApiResponse.success(empty);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Order o : orders) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("orderNo", o.getOrderNo());
+            m.put("amount", o.getAmount());
+            m.put("status", o.getStatus());
+            m.put("authCode", o.getAuthCode());
+            m.put("authStatus", o.getAuthStatus());
+            m.put("productName", o.getProductName());
+            m.put("packageName", o.getPackageName());
+            m.put("createdAt", o.getCreatedAt());
+            result.add(m);
         }
-        return ApiResponse.success(priceRecord);
+        return ApiResponse.success(result);
     }
 }

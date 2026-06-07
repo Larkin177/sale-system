@@ -137,6 +137,8 @@ import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import AdminLayout from '@/components/AdminLayout.vue'
 import request from '@/utils/request'
+const uploadUrl = '/api/admin/upload'
+const uploadHeaders = { Authorization: `Bearer ${localStorage.getItem('token')}` }
 
 const packages = ref([])
 const products = ref([])

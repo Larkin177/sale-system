@@ -24,6 +24,10 @@ public class ProductPackage {
     private Integer authValidityHours;
     private Integer sortOrder;
     private String status;
+
+    private String fileUrl;
+
+    private String emailTemplate;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)

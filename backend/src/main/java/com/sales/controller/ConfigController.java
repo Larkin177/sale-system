@@ -18,11 +18,12 @@ public class ConfigController {
     @GetMapping("/config")
     public ApiResponse<Map<String, String>> getPublicConfig() {
         Map<String, String> config = configService.getAllConfig();
-        // 只返回客户端需要的配置
         Map<String, String> publicConfig = new java.util.HashMap<>();
-        publicConfig.put("base_price", config.get("base_price"));
-        publicConfig.put("min_price", config.get("min_price"));
-        publicConfig.put("max_price", config.get("max_price"));
+        // 价格由套餐管理控制，不再暴露系统级价格配置
+        publicConfig.put("product_page_title", config.get("product_page_title"));
+        publicConfig.put("product_page_subtitle", config.get("product_page_subtitle"));
+        publicConfig.put("product_page_tips", config.get("product_page_tips"));
+        publicConfig.put("default_commission_rate", config.get("default_commission_rate"));
         return ApiResponse.success(publicConfig);
     }
 

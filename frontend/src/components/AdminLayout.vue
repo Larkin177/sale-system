@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="layout">
     <el-header class="header">
       <div class="header-left">
@@ -40,6 +40,10 @@
           <el-menu-item index="/admin/packages">
             <el-icon><Goods /></el-icon>
             <span>套餐管理</span>
+          </el-menu-item>
+          <el-menu-item index="/admin/tutorials">
+            <el-icon><Reading /></el-icon>
+            <span>教程管理</span>
           </el-menu-item>
           <el-menu-item index="/admin/settle">
             <el-icon><Money /></el-icon>

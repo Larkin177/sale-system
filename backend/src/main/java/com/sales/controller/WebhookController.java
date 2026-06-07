@@ -2,12 +2,17 @@ package com.sales.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sales.entity.Order;
+import com.sales.entity.ProductPackage;
+import com.sales.entity.SystemConfig;
 import com.sales.entity.Product;
 import com.sales.mapper.OrderMapper;
+import com.sales.mapper.ProductPackageMapper;
+import com.sales.mapper.SystemConfigMapper;
 import com.sales.mapper.ProductMapper;
 import com.sales.service.AlipayService;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
+import com.sales.service.EmailService;
 import com.sales.service.OrderService;
 import com.sales.service.SiteSettingService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +34,9 @@ public class WebhookController {
     private final ProductMapper productMapper;
     private final AlipayService alipayService;
     private final AuthCodeService authCodeService;
+    private final EmailService emailService;
+    private final ProductPackageMapper productPackageMapper;
+    private final SystemConfigMapper systemConfigMapper;
     private final SiteSettingService siteSettingService;
 
     @PostMapping("/wechat")
@@ -183,5 +191,30 @@ public class WebhookController {
         } catch (Exception e) {
             log.error("自动发货失败，订单号: {}", order.getOrderNo(), e);
         }
+    }
+
+    private void sendDeliveryEmail(Order order) {
+        String email = order.getCustomerEmail();
+        if (email == null || email.isEmpty()) return;
+
+        String siteUrl = "http://localhost:3000";
+        SystemConfig sc = systemConfigMapper.selectOne(
+                new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, "site_url"));
+        if (sc != null && sc.getConfigValue() != null && !sc.getConfigValue().isEmpty()) {
+            siteUrl = sc.getConfigValue();
+        }
+
+        String content = "Order " + order.getOrderNo() + " is ready. Visit " + siteUrl + " to get your auth code.";
+        if (order.getPackageId() != null) {
+            ProductPackage pp = productPackageMapper.selectById(order.getPackageId());
+            if (pp != null && pp.getEmailTemplate() != null && !pp.getEmailTemplate().isEmpty()) {
+                content = pp.getEmailTemplate();
+                content = content.replace("SITE_URL", siteUrl);
+                content = content.replace("ORDER_NO", order.getOrderNo());
+                content = content.replace("ORDER_AMOUNT", order.getAmount().toString());
+            }
+        }
+
+        emailService.sendEmail(email, "CC-Installer: Your order is ready!", content);
     }
 }

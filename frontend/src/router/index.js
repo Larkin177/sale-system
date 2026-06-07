@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+﻿import { createRouter, createWebHistory } from 'vue-router'
 import request from '@/utils/request'
 
 // 缓存站点名称，避免每次导航都请求
@@ -24,6 +24,11 @@ export function refreshSiteName() {
 
 const routes = [
   // 客户端
+  {
+    path: '/orders',
+    name: 'MyOrders',
+    component: () => import('../views/customer/Orders.vue')
+  },
   {
     path: '/',
     name: 'Home',
@@ -120,6 +125,12 @@ const routes = [
     path: '/admin/config',
     name: 'AdminConfig',
     component: () => import('../views/admin/Config.vue'),
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+  {
+    path: '/admin/tutorials',
+    name: 'AdminTutorials',
+    component: () => import('../views/admin/Tutorials.vue'),
     meta: { requiresAuth: true, role: 'admin' }
   },
   {

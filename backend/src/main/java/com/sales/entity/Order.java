@@ -28,6 +28,8 @@ public class Order {
 
     private String customerPhone;
 
+    private String customerEmail;
+
     private Long claimedBy;
 
     private LocalDateTime claimedAt;
