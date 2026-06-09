@@ -40,4 +40,25 @@ public class CustomerController {
         }
         return ApiResponse.success(result);
     }
+
+    @GetMapping("/api/customer/order")
+    public ApiResponse<Map<String, Object>> getOrder(@RequestParam String orderNo) {
+        Order order = orderMapper.selectOne(
+                new LambdaQueryWrapper<Order>()
+                        .eq(Order::getOrderNo, orderNo));
+        if (order == null) {
+            return ApiResponse.error("订单不存在");
+        }
+        Map<String, Object> m = new HashMap<>();
+        m.put("orderNo", order.getOrderNo());
+        m.put("amount", order.getAmount());
+        m.put("status", order.getStatus());
+        m.put("authCode", order.getAuthCode());
+        m.put("authStatus", order.getAuthStatus());
+        m.put("productName", order.getProductName());
+        m.put("packageName", order.getPackageName());
+        m.put("createdAt", order.getCreatedAt());
+        m.put("customerEmail", order.getCustomerEmail());
+        return ApiResponse.success(m);
+    }
 }

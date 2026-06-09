@@ -193,6 +193,9 @@ public class AdminOrderController {
             order.setStatus("delivered");
             orderMapper.updateById(order);
 
+            // 保存到 license_codes 表（用于核销）
+            authCodeService.saveLicenseCode(order.getId(), authCode);
+
             // 获取下载链接（优先使用套餐配置的链接）
             String downloadUrl = "";
             if (pkg != null && pkg.getDownloadUrl() != null && !pkg.getDownloadUrl().isEmpty()) {
@@ -224,12 +227,15 @@ public class AdminOrderController {
                     order.getOrderNo(), order.getCustomerPhone(), order.getPackageName(), authCode);
             log.info("[自动发货] 短信内容: {}", message);
 
+            // 发送邮件通知客户
+            sendDeliveryEmail(order, downloadUrl, authCode);
+
         } catch (Exception e) {
             log.error("自动发货失败 - 订单: {}", order.getOrderNo(), e);
         }
     }
 
-    private void sendDeliveryEmail(Order order) {
+    private void sendDeliveryEmail(Order order, String downloadUrl, String authCode) {
         String email = order.getCustomerEmail();
         if (email == null || email.isEmpty()) return;
 
@@ -240,16 +246,50 @@ public class AdminOrderController {
             siteUrl = sc.getConfigValue();
         }
 
-        String content = "Order " + order.getOrderNo() + " is ready. Visit " + siteUrl + " to get your auth code.";
-        if (order.getPackageId() != null) {
-            ProductPackage pp = productPackageMapper.selectById(order.getPackageId());
-            if (pp != null && pp.getEmailTemplate() != null && !pp.getEmailTemplate().isEmpty()) {
-                content = pp.getEmailTemplate();
-                content = content.replace("SITE_URL", siteUrl);
-                content = content.replace("ORDER_NO", order.getOrderNo());
-            }
+        // 使用管理端可配置的 delivery_template
+        String template = configService.getConfig("delivery_template");
+        if (template == null || template.isEmpty()) {
+            template = """
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #667eea;">{product_name} - 订单已发货</h2>
+                    <p>感谢您的购买！</p>
+                    <p><strong>订单号：</strong>{order_no}</p>
+                    <p><strong>套餐：</strong>{package_name}</p>
+                    <p><strong>金额：</strong>¥{amount}</p>
+                    <p><strong>授权码：</strong><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">{auth_code}</code></p>
+                    <p>🔐 授权码有效期 {hours} 小时，一机一码，激活后即失效</p>
+                    <p>请点击下方链接下载安装器：</p>
+                    <a href="{download_url}" style="display: inline-block; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 8px; margin: 16px 0;">📥 下载安装器</a>
+                    <p style="color: #999; font-size: 12px; margin-top: 24px;">CC-Installer 自动发货邮件</p>
+                </div>
+                """;
         }
 
-        emailService.sendEmail(email, "CC-Installer: Your order is ready!", content);
+        // 获取授权有效期
+        int validityHours = 72;
+        ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
+        if (pkg != null && pkg.getAuthValidityHours() != null) {
+            validityHours = pkg.getAuthValidityHours();
+        }
+
+        // 生成带 token 的订单查询链接
+        String orderUrl = siteUrl + "/orders?orderNo=" + order.getOrderNo();
+
+        String content = template
+                .replace("{site_name}", siteSettingService.getSetting("site_name") != null ? siteSettingService.getSetting("site_name") : "CC-Installer")
+                .replace("{site_url}", siteUrl)
+                .replace("{order_no}", order.getOrderNo())
+                .replace("{amount}", order.getAmount().toString())
+                .replace("{phone}", order.getCustomerPhone() != null ? order.getCustomerPhone() : "")
+                .replace("{email}", email)
+                .replace("{download_url}", downloadUrl != null && !downloadUrl.isEmpty() ? downloadUrl : orderUrl)
+                .replace("{order_url}", orderUrl)
+                .replace("{auth_code}", authCode != null ? authCode : "")
+                .replace("{package_name}", order.getPackageName() != null ? order.getPackageName() : "")
+                .replace("{product_name}", order.getProductName() != null ? order.getProductName() : "")
+                .replace("{platform}", order.getPlatform() != null ? order.getPlatform() : "")
+                .replace("{hours}", String.valueOf(validityHours));
+
+        emailService.sendEmail(email, siteSettingService.getSetting("site_name") + " - 订单已发货", content);
     }
 }

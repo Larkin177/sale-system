@@ -12,6 +12,7 @@ import com.sales.mapper.ProductMapper;
 import com.sales.service.AlipayService;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
+import com.sales.service.ConfigService;
 import com.sales.service.EmailService;
 import com.sales.service.OrderService;
 import com.sales.service.SiteSettingService;
@@ -38,6 +39,7 @@ public class WebhookController {
     private final ProductPackageMapper productPackageMapper;
     private final SystemConfigMapper systemConfigMapper;
     private final SiteSettingService siteSettingService;
+    private final ConfigService configService;
 
     @PostMapping("/wechat")
     public String wechatNotify(@RequestBody Map<String, Object> params) {
@@ -178,6 +180,13 @@ public class WebhookController {
                 order.setProductName(product.getName());
             }
 
+            // 获取套餐下载链接
+            String downloadUrl = "";
+            ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
+            if (pkg != null && pkg.getDownloadUrl() != null && !pkg.getDownloadUrl().isEmpty()) {
+                downloadUrl = pkg.getDownloadUrl();
+            }
+
             // 生成授权码
             String authCode = authCodeService.generateAuthCode(order.getId(), validityHours);
 
@@ -187,13 +196,19 @@ public class WebhookController {
             order.setStatus("delivered");
             orderMapper.updateById(order);
 
+            // 保存到 license_codes 表（用于核销）
+            authCodeService.saveLicenseCode(order.getId(), authCode);
+
+            // 发送邮件通知
+            sendDeliveryEmail(order, downloadUrl, authCode);
+
             log.info("自动发货成功，订单号: {}, 授权码: {}", order.getOrderNo(), authCode);
         } catch (Exception e) {
             log.error("自动发货失败，订单号: {}", order.getOrderNo(), e);
         }
     }
 
-    private void sendDeliveryEmail(Order order) {
+    private void sendDeliveryEmail(Order order, String downloadUrl, String authCode) {
         String email = order.getCustomerEmail();
         if (email == null || email.isEmpty()) return;
 
@@ -204,17 +219,32 @@ public class WebhookController {
             siteUrl = sc.getConfigValue();
         }
 
-        String content = "Order " + order.getOrderNo() + " is ready. Visit " + siteUrl + " to get your auth code.";
-        if (order.getPackageId() != null) {
-            ProductPackage pp = productPackageMapper.selectById(order.getPackageId());
-            if (pp != null && pp.getEmailTemplate() != null && !pp.getEmailTemplate().isEmpty()) {
-                content = pp.getEmailTemplate();
-                content = content.replace("SITE_URL", siteUrl);
-                content = content.replace("ORDER_NO", order.getOrderNo());
-                content = content.replace("ORDER_AMOUNT", order.getAmount().toString());
-            }
+        // 使用可配置的 delivery_template
+        String template = configService.getConfig("delivery_template");
+        if (template == null || template.isEmpty()) {
+            template = "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;\"><h2 style=\"color:#667eea;\">{product_name} - 订单已发货</h2><p>感谢您的购买！</p><p><strong>订单号：</strong>{order_no}</p><p><strong>授权码：</strong><code style=\"background:#f3f4f6;padding:4px 8px;border-radius:4px;\">{auth_code}</code></p><p>🔐 授权码有效期 {hours} 小时，一机一码</p><a href=\"{download_url}\" style=\"display:inline-block;padding:12px 24px;background:#667eea;color:white;text-decoration:none;border-radius:8px;margin:16px 0;\">📥 下载安装器</a></div>";
         }
 
-        emailService.sendEmail(email, "CC-Installer: Your order is ready!", content);
+        int validityHours = 72;
+        ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
+        if (pkg != null && pkg.getAuthValidityHours() != null) {
+            validityHours = pkg.getAuthValidityHours();
+        }
+
+        String orderUrl = siteUrl + "/orders?orderNo=" + order.getOrderNo();
+        String content = template
+                .replace("{site_name}", siteSettingService.getSetting("site_name") != null ? siteSettingService.getSetting("site_name") : "CC-Installer")
+                .replace("{site_url}", siteUrl)
+                .replace("{order_no}", order.getOrderNo())
+                .replace("{amount}", order.getAmount().toString())
+                .replace("{email}", email)
+                .replace("{download_url}", downloadUrl != null && !downloadUrl.isEmpty() ? downloadUrl : orderUrl)
+                .replace("{order_url}", orderUrl)
+                .replace("{auth_code}", authCode != null ? authCode : "")
+                .replace("{package_name}", order.getPackageName() != null ? order.getPackageName() : "")
+                .replace("{product_name}", order.getProductName() != null ? order.getProductName() : "")
+                .replace("{hours}", String.valueOf(validityHours));
+
+        emailService.sendEmail(email, "您的订单已发货", content);
     }
 }

@@ -36,3 +36,9 @@ uploads/
 .env
 .env.local
 .env.*.local
+
+# Backup files
+v2_*.vue
+schema.sql
+sql/schema_clean.sql
+sql/temp.sql
