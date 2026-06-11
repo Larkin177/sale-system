@@ -112,6 +112,10 @@ public class PayController {
         Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>().eq(Order::getOrderNo, orderNo));
         if (order == null) return ApiResponse.error("not found");
         if (!"pending".equals(order.getStatus())) return ApiResponse.error("status: " + order.getStatus());
+        String method = body.get("paymentMethod");
+        if (method != null && !method.isEmpty()) {
+            order.setPaymentMethod(method);
+        }
         order.setStatus("pending_verify");
         orderMapper.updateById(order);
         return ApiResponse.success(Map.of("status", "pending_verify", "message", "submitted"));

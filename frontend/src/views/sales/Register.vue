@@ -6,8 +6,14 @@
         <el-form-item prop="name">
           <el-input v-model="form.name" placeholder="请输入姓名" prefix-icon="User" />
         </el-form-item>
+        <el-form-item prop="email">
+          <el-input v-model="form.email" placeholder="请输入邮箱" prefix-icon="Message" />
+        </el-form-item>
         <el-form-item prop="phone">
           <el-input v-model="form.phone" placeholder="请输入手机号" prefix-icon="Phone" />
+        </el-form-item>
+        <el-form-item prop="code">
+          <el-input v-model="form.code" placeholder="请设置推广码（自定义，不可重复）" prefix-icon="Key" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input v-model="form.password" type="password" placeholder="请设置密码" prefix-icon="Lock" show-password />
@@ -40,7 +46,9 @@ const loading = ref(false)
 
 const form = ref({
   name: '',
+  email: '',
   phone: '',
+  code: '',
   password: '',
   confirmPassword: ''
 })
@@ -55,9 +63,17 @@ const validateConfirmPassword = (rule, value, callback) => {
 
 const rules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
+  ],
   phone: [
     { required: true, message: '请输入手机号', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请设置推广码', trigger: 'blur' },
+    { min: 4, max: 20, message: '推广码长度4-20位', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请设置密码', trigger: 'blur' },
@@ -75,7 +91,9 @@ const handleRegister = async () => {
   try {
     await request.post('/sales/register', {
       name: form.value.name,
+      email: form.value.email,
       phone: form.value.phone,
+      code: form.value.code,
       password: form.value.password
     })
     ElMessage.success('注册成功，请登录')

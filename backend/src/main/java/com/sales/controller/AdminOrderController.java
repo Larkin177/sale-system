@@ -10,6 +10,8 @@ import com.sales.mapper.OrderMapper;
 import com.sales.mapper.ProductMapper;
 import com.sales.mapper.SystemConfigMapper;
 import com.sales.mapper.ProductPackageMapper;
+import com.sales.mapper.SalesMapper;
+import com.sales.entity.Sales;
 import com.sales.service.AuthCodeService;
 import com.sales.service.CommissionService;
 import com.sales.service.ConfigService;
@@ -20,6 +22,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +45,7 @@ public class AdminOrderController {
     private final SiteSettingService siteSettingService;
     private final EmailService emailService;
     private final SystemConfigMapper systemConfigMapper;
+    private final SalesMapper salesMapper;
 
     @GetMapping
     public ApiResponse<Page<Order>> list(
@@ -53,6 +59,15 @@ public class AdminOrderController {
             wrapper.eq(Order::getStatus, status);
         }
         Page<Order> result = orderMapper.selectPage(pageParam, wrapper);
+        // 填充销售姓名
+        if (result.getRecords() != null) {
+            for (Order o : result.getRecords()) {
+                if (o.getSalesId() != null) {
+                    Sales s = salesMapper.selectById(o.getSalesId());
+                    if (s != null) o.setSalesName(s.getName());
+                }
+            }
+        }
         return ApiResponse.success(result);
     }
 
@@ -120,10 +135,34 @@ public class AdminOrderController {
         order.setReviewedBy(adminId);
         order.setReviewNote("已拒绝: " + note);
         order.setReviewedAt(LocalDateTime.now());
-        // 打回 pending 状态，不发货
+        order.setStatus("rejected");
         orderMapper.updateById(order);
 
         log.info("管理员拒绝收款 - 订单: {}, 原因: {}", order.getOrderNo(), note);
+
+        // 发送拒绝通知邮件
+        try {
+            String email = order.getCustomerEmail();
+            String siteName = siteSettingService.getSetting("site_name");
+            if (siteName == null || siteName.isEmpty()) siteName = "CC-Installer";
+            if (email != null && !email.isEmpty()) {
+                String template = configService.getConfig("reject_template");
+                if (template == null || template.isEmpty()) {
+                    template = "<div><h2>订单已被拒绝</h2><p>您的订单 {order_no} 已被管理员拒绝。</p><p>原因: {reason}</p></div>";
+                }
+                String content = template
+                    .replace("{site_name}", siteName)
+                    .replace("{order_no}", order.getOrderNo())
+                    .replace("{amount}", order.getAmount() != null ? order.getAmount().toString() : "")
+                    .replace("{reason}", note)
+                    .replace("{email}", email);
+                emailService.sendEmail(email, siteName + " - 订单已被拒绝", content);
+                log.info("拒绝通知邮件已发送 -> {}", email);
+            }
+        } catch (Exception e) {
+            log.warn("拒绝通知邮件发送失败: {}", e.getMessage());
+        }
+
         return ApiResponse.success();
     }
 
@@ -194,7 +233,34 @@ public class AdminOrderController {
             orderMapper.updateById(order);
 
             // 保存到 license_codes 表（用于核销）
-            authCodeService.saveLicenseCode(order.getId(), authCode);
+            try {
+                authCodeService.saveLicenseCode(order.getId(), authCode);
+            } catch (Exception e) {
+                log.warn("license_codes 保存失败(不影响发货): {}", e.getMessage());
+            }
+
+            // 同步注册到 Cloudflare Worker
+            try {
+                String codeId = authCodeService.parseCodeId(authCode);
+                if (codeId != null) {
+                    String json = String.format("{\"code\":\"%s\",\"codeId\":\"%s\",\"version\":\"sale-system\"}",
+                            authCode.replace("\"", "\\\""), codeId);
+                    URI uri = URI.create("https://auth.wonderhow.store/api/auth/register");
+                    HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setDoOutput(true);
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    try (OutputStream os = conn.getOutputStream()) {
+                        os.write(json.getBytes("UTF-8"));
+                    }
+                    int respCode = conn.getResponseCode();
+                    log.info("Cloudflare Worker 注册结果: {} - {}", respCode, authCode.substring(0, Math.min(30, authCode.length())) + "...");
+                }
+            } catch (Exception e) {
+                log.warn("Cloudflare Worker 注册失败(不影响发货): {}", e.getMessage());
+            }
 
             // 获取下载链接（优先使用套餐配置的链接）
             String downloadUrl = "";
@@ -246,6 +312,11 @@ public class AdminOrderController {
             siteUrl = sc.getConfigValue();
         }
 
+        // 将相对路径转为绝对URL
+        if (downloadUrl != null && downloadUrl.startsWith("/")) {
+            downloadUrl = siteUrl + downloadUrl;
+        }
+
         // 使用管理端可配置的 delivery_template
         String template = configService.getConfig("delivery_template");
         if (template == null || template.isEmpty()) {
@@ -282,7 +353,7 @@ public class AdminOrderController {
                 .replace("{amount}", order.getAmount().toString())
                 .replace("{phone}", order.getCustomerPhone() != null ? order.getCustomerPhone() : "")
                 .replace("{email}", email)
-                .replace("{download_url}", downloadUrl != null && !downloadUrl.isEmpty() ? downloadUrl : orderUrl)
+                .replace("{download_url}", orderUrl)
                 .replace("{order_url}", orderUrl)
                 .replace("{auth_code}", authCode != null ? authCode : "")
                 .replace("{package_name}", order.getPackageName() != null ? order.getPackageName() : "")
@@ -290,6 +361,11 @@ public class AdminOrderController {
                 .replace("{platform}", order.getPlatform() != null ? order.getPlatform() : "")
                 .replace("{hours}", String.valueOf(validityHours));
 
-        emailService.sendEmail(email, siteSettingService.getSetting("site_name") + " - 订单已发货", content);
+        boolean sent = emailService.sendEmail(email, siteSettingService.getSetting("site_name") + " - 订单已发货", content);
+        if (sent) {
+            log.info("发货邮件已发送 -> {}", email);
+        } else {
+            log.warn("发货邮件发送失败 -> {}", email);
+        }
     }
 }

@@ -25,6 +25,7 @@ public class AuthFilter implements Filter {
         "/api/auth/sales/login",
         "/api/auth/admin/login",
         "/api/sales/register",
+        "/api/sales/forgot-password",
         "/api/config",
         "/api/pay/",
         "/api/payment/",

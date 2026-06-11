@@ -8,7 +8,10 @@
           <el-input v-model="form.orderNo" placeholder="请输入订单号" />
         </el-form-item>
         <el-form-item label="客户手机号" prop="phone">
-          <el-input v-model="form.phone" placeholder="请输入客户手机号" />
+          <el-input v-model="form.phone" placeholder="手机号（二选一）" />
+        </el-form-item>
+        <el-form-item label="客户邮箱" prop="email">
+          <el-input v-model="form.email" placeholder="邮箱地址（二选一）" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleClaim" :loading="loading">
@@ -54,7 +57,8 @@ const unclaimedOrders = ref([])
 
 const form = ref({
   orderNo: '',
-  phone: ''
+  phone: '',
+  email: ''
 })
 
 const rules = {

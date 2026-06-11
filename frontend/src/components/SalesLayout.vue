@@ -51,6 +51,14 @@
             <el-icon><Trophy /></el-icon>
             <span>排行榜</span>
           </el-menu-item>
+          <el-menu-item index="/s/commission">
+            <el-icon><Coin /></el-icon>
+            <span>分润结算</span>
+          </el-menu-item>
+          <el-menu-item index="/s/payment-code">
+            <el-icon><Wallet /></el-icon>
+            <span>收款码管理</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
 
@@ -66,7 +74,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getSiteSettings } from '@/api/config'
-import { User, ArrowDown, Link, SwitchButton, DataAnalysis, List, Trophy } from '@element-plus/icons-vue'
+import { User, ArrowDown, Link, SwitchButton, DataAnalysis, List, Trophy, Coin, Wallet } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()

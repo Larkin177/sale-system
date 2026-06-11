@@ -1,15 +1,5 @@
 <template>
   <div class="home" v-loading="loading">
-    <!-- ==================== 顶部导航栏 ==================== -->
-    <nav class="top-nav" v-if="!loading">
-      <div class="nav-inner">
-        <span class="nav-brand">{{ settings.site_name || 'CC-Installer' }}</span>
-        <div class="nav-links">
-          <el-button text size="small" @click="$router.push('/orders')">📋 我的订单</el-button>
-        </div>
-      </div>
-    </nav>
-
     <!-- ==================== Hero Section ==================== -->
     <div
       v-if="!loading"
@@ -19,6 +9,10 @@
         '--hero-bg-end': settings.hero_bg_color_end || '#764ba2'
       }"
     >
+      <div class="hero-nav">
+        <span class="hero-brand"></span>
+        <el-button text size="small" class="hero-orders-btn" @click="$router.push('/orders')">我的订单</el-button>
+      </div>
       <div class="hero-content">
         <h1 class="hero-title">{{ settings.hero_title || '专业软件工具' }}</h1>
         <p class="hero-subtitle">{{ settings.hero_subtitle || '高效、稳定、安全的解决方案' }}</p>
@@ -28,6 +22,9 @@
       </div>
     </div>
     <div v-else class="hero hero-skeleton">
+      <div class="hero-nav">
+        <span class="hero-brand"></span>
+      </div>
       <div class="hero-content">
         <div class="skeleton-line skeleton-title"></div>
         <div class="skeleton-line skeleton-subtitle"></div>
@@ -83,9 +80,7 @@
           <div class="tab-content">
             <div class="tutorials-area" v-if="tutorials.length > 0">
               <el-tabs v-model="tutorialCategory" class="tutorial-sub-tabs">
-                <el-tab-pane label="📦 安装教程" name="installer" />
-                <el-tab-pane label="🤖 Claude Code" name="claude-code" />
-                <el-tab-pane label="⚡ Codex" name="codex" />
+                <el-tab-pane v-for="cat in categories" :key="cat.slug" :label="cat.name" :name="cat.slug" />
               </el-tabs>
               <div class="tutorials-grid">
                 <div
@@ -95,9 +90,10 @@
                   @click="openTutorial(t)"
                 >
                   <div class="tutorial-thumb">
-                    <img v-if="t.thumbnailUrl" :src="t.thumbnailUrl" alt="" />
-                    <div v-else class="tutorial-thumb-placeholder">
-                      <el-icon :size="36"><VideoPlay /></el-icon>
+                    <img v-if="t.thumbnailUrl" :src="t.thumbnailUrl" alt="" @error="e => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }" />
+                    <img v-else-if="t.type === 'image' && t.mediaUrl" :src="t.mediaUrl" alt="" style="width:100%;height:100%;object-fit:cover;" @error="e => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }" />
+                    <div v-else class="tutorial-thumb-fallback" :title="t.title">
+                      <span class="tutorial-thumb-title">{{ t.title }}</span>
                     </div>
                     <div class="tutorial-badge">
                       <el-tag size="small" :type="t.type === 'video' ? 'danger' : t.type === 'image' ? 'warning' : ''" effect="dark">
@@ -114,7 +110,7 @@
                 </div>
               </div>
               <div v-if="filteredTutorials.length === 0" class="tutorials-empty">
-                <el-empty description="暂无教程，敬请期待" />
+                <el-empty description="暂无教程，敬请期待" :image-size="0" />
               </div>
             </div>
             <div v-else class="tutorials-empty">
@@ -126,7 +122,7 @@
     </div>
 
     <!-- ==================== Tutorial Detail Dialog ==================== -->
-    <el-dialog v-model="tutorialVisible" :title="currentTutorial?.title" width="750px" :close-on-click-modal="true">
+    <el-dialog v-model="tutorialVisible" :title="currentTutorial?.title" width="750px" :close-on-click-modal="true" append-to-body="false">
       <div v-if="currentTutorial" class="tutorial-detail-body">
         <div v-if="currentTutorial.type === 'video'" class="tutorial-video-wrap">
           <video v-if="currentTutorial.mediaUrl" :src="currentTutorial.mediaUrl" controls style="width:100%;max-height:450px;border-radius:12px;"></video>
@@ -136,7 +132,7 @@
           <img v-if="currentTutorial.mediaUrl" :src="currentTutorial.mediaUrl" style="width:100%;border-radius:12px;" />
           <div v-else class="tutorial-no-media"><el-empty description="图片资源暂未上传" /></div>
         </div>
-        <div v-if="currentTutorial.type === 'text'" class="tutorial-content" v-html="currentTutorial.content"></div>
+        <div v-if="currentTutorial.type === 'text'" class="tutorial-content" v-html="renderedContent"></div>
       </div>
     </el-dialog>
 
@@ -147,6 +143,7 @@
       width="600px"
       :close-on-click-modal="true"
       destroy-on-close
+      append-to-body="false"
     >
       <div class="modal-content" v-if="modalFeature">
         <div v-if="modalFeature.content_type === 'image'" class="modal-media">
@@ -177,6 +174,7 @@
       width="520px"
       :close-on-click-modal="false"
       destroy-on-close
+      append-to-body="false"
     >
       <!-- Step 1: 邮箱 + 图形验证码 -->
       <div v-if="buyStep === 1" class="buy-step">
@@ -341,6 +339,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Trophy, Star, Service, Coin, Position, Download, Present, Notebook, VideoPlay, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { marked } from 'marked'
 import request from '@/utils/request'
 
 const route = useRoute()
@@ -418,13 +417,33 @@ const downloadFile = (url) => {
 // ==================== 下半区 Tab ====================
 const mainTab = ref('products')
 const tutorials = ref([])
+const categories = ref([])
 const tutorialCategory = ref('installer')
 const tutorialVisible = ref(false)
 const currentTutorial = ref(null)
+const renderedContent = computed(() => {
+  if (!currentTutorial.value || currentTutorial.value.type !== 'text') return ''
+  try {
+    return marked.parse(currentTutorial.value.content || '')
+  } catch(e) {
+    return currentTutorial.value.content || ''
+  }
+})
 
 const filteredTutorials = computed(() => {
+  if (!tutorialCategory.value || !categories.value.find(c => c.slug === tutorialCategory.value)) return []
   return tutorials.value.filter(t => t.category === tutorialCategory.value)
 })
+
+async function loadCategories() {
+  try {
+    const res = await request.get('/categories')
+    categories.value = res.data || []
+    if (categories.value.length > 0 && !tutorialCategory.value) {
+      tutorialCategory.value = categories.value[0].slug
+    }
+  } catch(e) {}
+}
 
 async function loadTutorials() {
   try {
@@ -598,7 +617,7 @@ async function goStep3() {
 async function markPaid() {
   submitting.value = true
   try {
-    await request.post('/pay/mark-paid', { orderNo: orderNo.value })
+    await request.post('/pay/mark-paid', { orderNo: orderNo.value, paymentMethod: paymentMethod.value })
     paidDialogVisible.value = true
     countdown.value = 10
     countdownTimer = setInterval(() => {
@@ -622,6 +641,7 @@ function closePaidDialog() {
 onMounted(async () => {
   try {
     // 并行加载站点配置、套餐列表、教程
+    await loadCategories();
     const [siteRes, pkgRes] = await Promise.all([
       request.get('/site-settings').catch(() => ({ data: {} })),
       request.get('/pay/packages').catch(() => ({ data: [] })),
@@ -649,10 +669,13 @@ onMounted(async () => {
 /* ==================== Hero Section ==================== */
 .hero {
   background: linear-gradient(135deg, var(--hero-bg) 0%, var(--hero-bg-end) 100%);
-  padding: 120px 24px 80px;
+  padding: 0 24px 100px;
   text-align: center;
   position: relative;
   overflow: hidden;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero::before {
@@ -675,31 +698,35 @@ onMounted(async () => {
 .hero-content {
   position: relative;
   z-index: 1;
-  max-width: 700px;
+  max-width: 800px;
   margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .hero-title {
-  font-size: 52px;
-  font-weight: 700;
+  font-size: 56px;
+  font-weight: 800;
   color: white;
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   letter-spacing: -0.5px;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .hero-subtitle {
-  font-size: 20px;
+  font-size: 22px;
   color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 40px;
-  font-weight: 300;
+  margin: 0 0 44px;
+  font-weight: 400;
 }
 
 .hero-btn {
-  padding: 14px 48px;
-  font-size: 16px;
-  border-radius: 8px;
-  font-weight: 500;
+  padding: 16px 56px;
+  font-size: 18px;
+  border-radius: 10px;
+  font-weight: 600;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
@@ -947,39 +974,53 @@ onMounted(async () => {
 .paid-step-text p { margin: 0; font-size: 13px; color: #666; }
 .paid-countdown { text-align: center; font-size: 13px; color: #999; margin-top: 8px; }
 
-/* ==================== Top Nav ==================== */
-.top-nav {
-  background: white;
-  border-bottom: 1px solid #eef0f6;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.nav-inner {
+/* ==================== Hero Nav (merged) ==================== */
+.hero-nav {
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px;
-  height: 56px;
+  padding: 16px 24px 50px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  z-index: 2;
 }
 
-.nav-brand {
-  font-size: 18px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.hero-brand {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  letter-spacing: 0.5px;
 }
 
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.hero-orders-btn {
+  color: rgba(255,255,255,0.75) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  transition: color 0.25s !important;
+  letter-spacing: 1px;
+  position: relative;
 }
+.hero-orders-btn::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.5);
+  transition: width 0.3s ease;
+}
+.hero-orders-btn:hover {
+  color: #fff !important;
+  background: transparent !important;
+}
+.hero-orders-btn:hover::after { width: 100%; }
 
 /* ==================== Bottom Combined Section ==================== */
 .bottom-section {
@@ -1030,24 +1071,29 @@ onMounted(async () => {
   gap: 6px;
 }
 
-.main-tabs :deep(.el-tabs__content) { padding: 40px 32px; }
+.main-tabs :deep(.el-tabs__content) { padding: 8px 0; }
 
-.tab-content { min-height: 200px; }
+.tab-content {
+  min-height: 280px;
+  width: 100%;
+  padding: 24px 32px;
+}
 
 /* Features Grid (inline in tab) */
-.features-area { margin-bottom: 16px; }
+.features-area { width: 100%; }
+.tutorials-area { width: 100%; }
 
 .features-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 24px;
 }
 
 .feature-card-inline {
   background: #f8faff;
   border: 2px solid #eef0f6;
   border-radius: 16px;
-  padding: 32px 24px;
+  padding: 40px 28px;
   text-align: center;
   transition: all 0.3s ease;
 }
@@ -1080,27 +1126,23 @@ onMounted(async () => {
 }
 
 .feature-desc-inline {
-  font-size: 14px;
+  font-size: 15px;
   color: #6b7280;
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 /* Tutorials */
-.tutorial-sub-tabs {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-
+  .tutorial-sub-tabs { margin-bottom: 4px; }
+.tutorial-sub-tabs :deep(.el-tabs__header) { margin: 0; border-bottom: none; }
 .tutorial-sub-tabs :deep(.el-tabs__nav-wrap::after) { display: none; }
-
 .tutorial-sub-tabs :deep(.el-tabs__item) {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 0 20px;
-  height: 40px;
-  line-height: 40px;
+  padding: 0 12px;
+  height: 32px;
+  line-height: 32px;
+  color: #6b7280;
 }
 
 .tutorials-grid {
@@ -1110,17 +1152,21 @@ onMounted(async () => {
 }
 
 .tutorial-card {
-  background: white;
-  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  background: #f8faff;
+  border: 2px solid #eef0f6;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #f3f4f6;
   cursor: pointer;
-  transition: all 0.25s;
+  transition: all 0.3s ease;
+  min-height: 240px;
 }
 
 .tutorial-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 24px rgba(102,126,234,0.1);
+  border-color: #e0e7ff;
 }
 
 .tutorial-thumb {
@@ -1135,6 +1181,27 @@ onMounted(async () => {
 
 .tutorial-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .tutorial-thumb-placeholder { color: #9ca3af; }
+.tutorial-thumb-fallback {
+  width: 100%; height: 100%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.tutorial-thumb-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #374151;
+  text-align: center;
+  line-height: 1.4;
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .tutorial-badge { position: absolute; top: 10px; right: 10px; }
 
 .tutorial-info {
@@ -1146,7 +1213,7 @@ onMounted(async () => {
 
 .tutorial-info h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   flex: 1;
@@ -1155,12 +1222,29 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.tutorials-empty { padding: 48px 0; }
+.tutorials-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 0;
+}
+.tutorials-empty .el-empty { padding: 0 !important; }
+.tutorials-empty .el-empty__image { display: none; }
+.tutorials-empty .el-empty__description { margin-top: 0; }
 
 .tutorial-detail-body { line-height: 1.8; }
 .tutorial-no-media { padding: 40px 0; text-align: center; }
 .tutorial-content { font-size: 15px; color: #374151; line-height: 1.9; }
 .tutorial-content :deep(img) { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+.tutorial-content :deep(h1), .tutorial-content :deep(h2), .tutorial-content :deep(h3) { margin: 20px 0 10px; color: #1f2937; }
+.tutorial-content :deep(p) { margin: 8px 0; }
+.tutorial-content :deep(code) { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.tutorial-content :deep(pre) { background: #1f2937; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; }
+.tutorial-content :deep(pre code) { background: none; padding: 0; color: inherit; }
+.tutorial-content :deep(ul), .tutorial-content :deep(ol) { padding-left: 20px; margin: 8px 0; }
+.tutorial-content :deep(blockquote) { border-left: 4px solid #667eea; padding-left: 16px; margin: 12px 0; color: #6b7280; }
+.tutorial-content :deep(a) { color: #667eea; text-decoration: none; }
 
 /* ==================== Skeleton Loading ==================== */
 .hero-skeleton {
@@ -1184,18 +1268,31 @@ onMounted(async () => {
 
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
-  .hero { padding: 80px 16px 60px; }
+  .hero { padding: 0 16px 60px; min-height: 400px; }
+  .hero-nav { padding: 12px 0 30px; }
   .hero-title { font-size: 32px; }
   .hero-subtitle { font-size: 16px; }
 
   .bottom-section { margin: -20px 16px 40px; padding: 0; }
-  .main-tabs :deep(.el-tabs__content) { padding: 24px 16px; }
-  .main-tabs :deep(.el-tabs__header) { padding: 0 16px; }
-  .main-tabs :deep(.el-tabs__item) { padding: 0 16px; font-size: 14px; }
-  .features-grid { grid-template-columns: 1fr; }
-  .tutorials-grid { grid-template-columns: 1fr; }
+  .main-tabs :deep(.el-tabs__content) { padding: 8px 12px; }
+  .main-tabs :deep(.el-tabs__header) { padding: 0 12px; }
+  .main-tabs :deep(.el-tabs__item) { padding: 0 10px; font-size: 13px; height: 40px; line-height: 40px; }
+  .features-grid { grid-template-columns: 1fr; gap: 12px; }
+  .feature-card-inline { padding: 20px 16px; }
+  .tutorials-grid { grid-template-columns: 1fr; gap: 12px; }
+  .tutorial-sub-tabs { margin-bottom: 4px; }
 
   .step-line { width: 30px; }
   .pkg-grid { grid-template-columns: 1fr; }
+
+
+}
+</style>
+<style>
+@media (max-width: 768px) {
+  .el-dialog { width: 92vw !important; max-width: 92vw !important; min-width: 0 !important; margin: 2vh auto !important; border-radius: 12px !important; }
+  .el-dialog__header { padding: 12px 14px 0 !important; }
+  .el-dialog__body { padding: 8px 14px 12px !important; overflow-x: hidden !important; }
+  .el-dialog__footer { padding: 0 14px 12px !important; }
 }
 </style>

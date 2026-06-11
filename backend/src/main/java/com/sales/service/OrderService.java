@@ -52,6 +52,7 @@ public class OrderService {
         order.setBaseAmount(amount);
         order.setSalesId(salesId);
         order.setProductId(pkg.getProductId());
+        order.setPackageId(pkg.getId());
         order.setPackageName(pkg.getName());
         order.setPlatform(pkg.getPlatform());
         order.setStatus("pending");
@@ -67,10 +68,27 @@ public class OrderService {
             return ApiResponse.error("订单不存在");
         }
 
-        // 验证手机号后4位（这里简化为直接匹配完整手机号）
         Sales sales = salesMapper.selectById(salesId);
         if (sales == null) {
             return ApiResponse.error("销售不存在");
+        }
+
+        // 支持手机号或邮箱验证
+        String phone = request.getPhone();
+        String email = request.getEmail();
+        String orderPhone = order.getCustomerPhone();
+        String orderEmail = order.getCustomerEmail();
+
+        if (phone != null && !phone.isEmpty()) {
+            if (orderPhone == null || !orderPhone.equals(phone)) {
+                return ApiResponse.error("手机号不匹配");
+            }
+        } else if (email != null && !email.isEmpty()) {
+            if (orderEmail == null || !orderEmail.equalsIgnoreCase(email)) {
+                return ApiResponse.error("邮箱不匹配");
+            }
+        } else {
+            return ApiResponse.error("请提供客户手机号或邮箱");
         }
 
         // 尝试认领（原子操作）

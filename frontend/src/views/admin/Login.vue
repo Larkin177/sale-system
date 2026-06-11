@@ -48,9 +48,10 @@ const rules = {
 }
 
 onMounted(() => {
-  const savedAccount = localStorage.getItem('admin_login_account')
-  if (savedAccount) {
-    form.value.username = savedAccount
+  const saved = JSON.parse(localStorage.getItem('admin_login_remember') || '{}')
+  if (saved.username) {
+    form.value.username = saved.username
+    form.value.password = saved.password || ''
     rememberMe.value = true
   }
 })
@@ -62,9 +63,9 @@ const handleLogin = async () => {
     const res = await request.post('/auth/admin/login', form.value)
     // 只记住用户名，不存储密码
     if (rememberMe.value) {
-      localStorage.setItem('admin_login_account', form.value.username)
+      localStorage.setItem('admin_login_remember', JSON.stringify({ username: form.value.username, password: form.value.password }))
     } else {
-      localStorage.removeItem('admin_login_account')
+      localStorage.removeItem('admin_login_remember')
     }
     authStore.setAuth(res.data.token, 'admin', res.data.admin)
     ElMessage.success('登录成功')

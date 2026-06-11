@@ -34,11 +34,44 @@
           ¥{{ row.amount?.toFixed(2) }}
         </template>
       </el-table-column>
-      <el-table-column prop="salesId" label="绑定销售" />
-      <el-table-column prop="customerPhone" label="客户手机" />
+      <el-table-column prop="salesName" label="绑定销售" width="100">
+        <template #default="{ row }">
+          {{ row.salesName || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="客户信息" min-width="200">
+        <template #default="{ row }">
+          <div style="font-size:12px;line-height:1.6;">
+            <div v-if="row.customerPhone">{{ row.customerPhone }}</div>
+            <div v-if="row.customerEmail" style="color:#666;">{{ row.customerEmail }}</div>
+            <div v-else style="color:#999;">无联系方式</div>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column prop="platform" label="平台" width="70">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.platform === 'mac' ? 'primary' : 'success'" effect="plain">
+            {{ row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Win' : '-' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="packageName" label="套餐" min-width="130">
+        <template #default="{ row }">
+          <span style="font-size:13px;white-space:nowrap;">{{ row.packageName || '-' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态">
         <template #default="{ row }">
           <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="_authStatus" label="授权码" width="110">
+        <template #default="{ row }">
+          <el-tag v-if="row._authChecked && row._authConsumed" type="danger" size="small">已核销</el-tag>
+          <el-tag v-else-if="row._authChecked && !row._authConsumed" type="success" size="small">未使用</el-tag>
+          <el-tag v-else-if="!row._authChecked && row.authStatus === 'active'" type="success" size="small">未使用</el-tag>
+          <el-tag v-else-if="row.authStatus" type="info" size="small">{{ row.authStatus }}</el-tag>
+          <span v-else style="color:#909399;font-size:12px;">-</span>
         </template>
       </el-table-column>
       <el-table-column prop="paymentMethod" label="支付方式">
@@ -71,6 +104,10 @@
             已自动发货
           </el-tag>
           <span v-else>-</span>
+          <el-button size="small" @click="openEmailDialog(row)" style="margin-left:4px;">
+            📧 邮件
+          </el-button>
+
         </template>
       </el-table-column>
     </el-table>
@@ -117,6 +154,28 @@
       </template>
     </el-dialog>
 
+    <!-- Send Email Dialog -->
+    <el-dialog v-model="emailDialog.visible" title="📧 发送邮件" width="550px">
+      <el-form label-width="80px">
+        <el-form-item label="收件人">
+          <el-input v-model="emailDialog.to" placeholder="customer@email.com" />
+        </el-form-item>
+        <el-form-item label="主题">
+          <el-input v-model="emailDialog.subject" placeholder="邮件主题" />
+        </el-form-item>
+        <el-form-item label="内容">
+          <el-input v-model="emailDialog.content" type="textarea" :rows="8" placeholder="支持HTML内容" />
+        </el-form-item>
+      </el-form>
+      <p style="font-size:12px;color:#909399;">
+        可用变量: <code>{order_no}</code> <code>{product_name}</code> <code>{auth_code}</code> <code>{amount}</code>
+      </p>
+      <template #footer>
+        <el-button @click="emailDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="doSendEmail" :loading="emailDialog.sending">发送</el-button>
+      </template>
+    </el-dialog>
+
   </AdminLayout>
 </template>
 
@@ -150,6 +209,16 @@ const rejectDialog = reactive({
   orderNo: '',
   note: '',
   loading: false
+})
+
+const emailDialog = reactive({
+  visible: false,
+  orderId: null,
+  orderNo: '',
+  to: '',
+  subject: '',
+  content: '',
+  sending: false,
 })
 
 const handleSelectionChange = (selection) => {
@@ -196,7 +265,24 @@ const loadOrders = async () => {
     const params = `page=${page.value}&size=10`
     const statusParam = activeTab.value !== 'all' ? `&status=${activeTab.value}` : ''
     const res = await request.get(`/admin/orders?${params}${statusParam}`)
-    orders.value = res.data?.records || []
+    const records = res.data?.records || []
+    // 自动查询每单的授权码云端状态
+    for (const r of records) {
+      if (r.authCode) {
+        try {
+          const cfRes = await fetch('https://auth.wonderhow.store/api/auth/check', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: r.authCode }),
+          })
+          const cfData = await cfRes.json()
+          r._authConsumed = cfData.consumed === true
+          r._authChecked = true
+        } catch(e) { r._authChecked = false }
+      } else {
+        r._authChecked = false
+      }
+    }
+    orders.value = records
     total.value = res.data?.total || 0
   } catch (e) {
     console.error('获取订单失败')
@@ -252,6 +338,35 @@ const handleRejectPayment = (row) => {
   rejectDialog.visible = true
 }
 
+const openEmailDialog = (row) => {
+  emailDialog.orderId = row.id
+  emailDialog.orderNo = row.orderNo
+  emailDialog.to = row.customerEmail || ''
+  emailDialog.subject = 'CC-Installer - 订单通知'
+  emailDialog.content = ''
+  emailDialog.visible = true
+}
+
+const doSendEmail = async () => {
+  if (!emailDialog.to) { ElMessage.warning('请输入收件人邮箱'); return }
+  if (!emailDialog.subject) { ElMessage.warning('请输入邮件主题'); return }
+  if (!emailDialog.content) { ElMessage.warning('请输入邮件内容'); return }
+  emailDialog.sending = true
+  try {
+    await request.post('/admin/email/send', {
+      to: emailDialog.to,
+      subject: emailDialog.subject,
+      content: emailDialog.content,
+    })
+    ElMessage.success('邮件已发送')
+    emailDialog.visible = false
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '发送失败')
+  } finally {
+    emailDialog.sending = false
+  }
+}
+
 const doRejectPayment = async () => {
   if (!rejectDialog.note.trim()) {
     ElMessage.warning('请填写拒绝原因')
@@ -276,12 +391,12 @@ const doRejectPayment = async () => {
 }
 
 const getStatusType = (status) => {
-  const map = { pending: 'info', pending_verify: 'warning', paid: 'success', delivered: 'success', redeemed: '', bound: 'warning', settled: '' }
+  const map = { pending: 'info', pending_verify: 'warning', paid: 'success', delivered: 'success', redeemed: '', bound: 'warning', settled: '', rejected: 'danger' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待支付', pending_verify: '待审核', paid: '已支付', delivered: '已发货', redeemed: '已核销', bound: '已绑定', settled: '已结算' }
+  const map = { pending: '待支付', pending_verify: '待审核', paid: '已付款', delivered: '已发货', redeemed: '已核销', bound: '已绑定', settled: '已结算', rejected: '已拒绝' }
   return map[status] || status
 }
 

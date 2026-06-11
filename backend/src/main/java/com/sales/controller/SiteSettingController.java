@@ -17,6 +17,15 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import org.jcodec.api.FrameGrab;
+import org.jcodec.api.JCodecException;
+import org.jcodec.common.model.Picture;
+import org.jcodec.scale.AWTUtil;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 
 @Slf4j
 @RestController
@@ -85,7 +94,10 @@ public class SiteSettingController {
 
             // 生成唯一文件名
             String ext = originalFilename.substring(originalFilename.lastIndexOf("."));
-            String newFilename = UUID.randomUUID().toString() + ext;
+            String baseName = originalFilename.lastIndexOf(".") > 0 
+                ? originalFilename.substring(0, originalFilename.lastIndexOf(".")) 
+                : "file";
+            String newFilename = baseName + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
 
             // 用 InputStream + Files.copy 保存，避免 file.transferTo 的路径问题
             Path filePath = uploadPath.resolve(newFilename);
@@ -97,13 +109,76 @@ public class SiteSettingController {
 
             // 返回可访问的 URL
             Map<String, String> result = new HashMap<>();
-            result.put("url", "/uploads/" + newFilename);
+            result.put("url", "/downloads/" + newFilename);
             result.put("filename", originalFilename);
+
+            // 如果是视频文件，自动生成缩略图
+            String thumbFilename = null;
+            String fileNameLower = originalFilename.toLowerCase();
+            if (isVideoFile(fileNameLower)) {
+                try {
+                    thumbFilename = generateVideoThumbnail(filePath, newFilename);
+                    if (thumbFilename != null) {
+                        result.put("thumbnailUrl", "/downloads/" + thumbFilename);
+                    }
+                } catch (Exception e) {
+                    log.warn("视频缩略图生成失败(不影响上传): {}", e.getMessage());
+                }
+            }
+
             return ApiResponse.success(result);
 
         } catch (IOException e) {
             log.error("文件上传失败", e);
             return ApiResponse.error(500, "上传失败: " + e.getMessage());
+        }
+    }
+
+    // 判断是否为视频文件
+    private boolean isVideoFile(String lower) {
+        return lower.endsWith(".mp4") || lower.endsWith(".avi") ||
+               lower.endsWith(".mov") || lower.endsWith(".wmv") || lower.endsWith(".flv");
+    }
+
+    // 从视频提取第一帧生成缩略图（优先 FFmpeg，失败则用 JCodec）
+    private String generateVideoThumbnail(Path videoPath, String videoFilename) {
+        String thumbName = videoFilename.substring(0, videoFilename.lastIndexOf(".")) + ".jpg";
+        Path thumbPath = videoPath.getParent().resolve(thumbName);
+
+        // 方案1: 使用 FFmpeg（支持格式最全）
+        try {
+            // 优先使用项目目录下的 ffmpeg.exe，其次用系统 PATH 中的 ffmpeg
+            String ffmpegCmd = "ffmpeg";
+            Path localFfmpeg = Paths.get("ffmpeg.exe");
+            if (Files.exists(localFfmpeg)) {
+                ffmpegCmd = localFfmpeg.toAbsolutePath().toString();
+            }
+            ProcessBuilder pb = new ProcessBuilder(
+                ffmpegCmd, "-y", "-i", videoPath.toString(),
+                "-vframes", "1", "-q:v", "2", thumbPath.toString()
+            );
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            boolean finished = p.waitFor(10, TimeUnit.SECONDS);
+            if (finished && p.exitValue() == 0 && Files.exists(thumbPath) && Files.size(thumbPath) > 0) {
+                log.info("视频缩略图生成成功(FFmpeg): {}", thumbPath.toAbsolutePath());
+                return thumbName;
+            }
+            log.warn("FFmpeg 未生效，尝试 JCodec 方案");
+        } catch (Exception e) {
+            log.warn("FFmpeg 不可用: {}，尝试 JCodec", e.getMessage());
+        }
+
+        // 方案2: 使用 JCodec（纯 Java 兜底）
+        try {
+            Picture picture = FrameGrab.getFrameFromFile(videoPath.toFile(), 0);
+            BufferedImage image = AWTUtil.toBufferedImage(picture);
+            ImageIO.write(image, "jpg", thumbPath.toFile());
+            log.info("视频缩略图生成成功(JCodec): {}", thumbPath.toAbsolutePath());
+            return thumbName;
+        } catch (Exception e) {
+            log.warn("视频缩略图生成失败(两种方案均无效): {} - {}", videoFilename, e.getMessage());
+            return null;
         }
     }
 
@@ -124,7 +199,10 @@ public class SiteSettingController {
         if (lower.endsWith(".zip") || lower.endsWith(".rar") ||
             lower.endsWith(".7z") || lower.endsWith(".pdf") ||
             lower.endsWith(".doc") || lower.endsWith(".docx") ||
-            lower.endsWith(".xls") || lower.endsWith(".xlsx")) {
+            lower.endsWith(".xls") || lower.endsWith(".xlsx") ||
+            lower.endsWith(".md") || lower.endsWith(".exe") ||
+            lower.endsWith(".msi") || lower.endsWith(".dmg") ||
+            lower.endsWith(".pkg")) {
             return true;
         }
         return false;

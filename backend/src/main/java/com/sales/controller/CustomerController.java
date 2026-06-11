@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.sales.dto.ApiResponse;
 import com.sales.entity.Order;
 import com.sales.mapper.OrderMapper;
+import com.sales.mapper.ProductPackageMapper;
+import com.sales.entity.ProductPackage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +19,7 @@ import java.util.Map;
 public class CustomerController {
 
     private final OrderMapper orderMapper;
+    private final ProductPackageMapper productPackageMapper;
 
     @GetMapping("/api/customer/orders")
     public ApiResponse<List<Map<String, Object>>> getOrders(@RequestParam String email) {
@@ -35,6 +38,8 @@ public class CustomerController {
             m.put("authStatus", o.getAuthStatus());
             m.put("productName", o.getProductName());
             m.put("packageName", o.getPackageName());
+            m.put("authValidityHours", getAuthValidityHours(o));
+            m.put("downloadUrl", getDownloadUrl(o));
             m.put("createdAt", o.getCreatedAt());
             result.add(m);
         }
@@ -57,8 +62,30 @@ public class CustomerController {
         m.put("authStatus", order.getAuthStatus());
         m.put("productName", order.getProductName());
         m.put("packageName", order.getPackageName());
+        m.put("authValidityHours", getAuthValidityHours(order));
+        m.put("downloadUrl", getDownloadUrl(order));
         m.put("createdAt", order.getCreatedAt());
         m.put("customerEmail", order.getCustomerEmail());
         return ApiResponse.success(m);
+    }
+
+    private String getDownloadUrl(Order order) {
+        if (order.getPackageId() != null) {
+            ProductPackage pkg = productPackageMapper.selectById(order.getPackageId());
+            if (pkg != null && pkg.getDownloadUrl() != null && !pkg.getDownloadUrl().isEmpty()) {
+                return pkg.getDownloadUrl();
+            }
+        }
+        return null;
+    }
+
+    private Integer getAuthValidityHours(Order order) {
+        if (order.getPackageId() != null) {
+            ProductPackage pkg = productPackageMapper.selectById(order.getPackageId());
+            if (pkg != null && pkg.getAuthValidityHours() != null) {
+                return pkg.getAuthValidityHours();
+            }
+        }
+        return 72;
     }
 }

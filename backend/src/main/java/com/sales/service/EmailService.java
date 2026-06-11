@@ -44,12 +44,28 @@ public class EmailService {
         s.setPassword(pass);
         Properties p = s.getJavaMailProperties();
         p.put("mail.smtp.auth", "true");
-        p.put("mail.smtp.starttls.enable", "true");
+        p.put("mail.smtp.connectiontimeout", "10000");
+        p.put("mail.smtp.timeout", "10000");
+        p.put("mail.smtp.writetimeout", "10000");
+        // 根据端口选择 SSL 或 STARTTLS
+        int portNum = port != null ? Integer.parseInt(port) : 587;
+        if (portNum == 465) {
+            p.put("mail.smtp.ssl.enable", "true");
+            p.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+        } else {
+            p.put("mail.smtp.starttls.enable", "true");
+        }
         mailSender = s;
         return s;
     }
 
     public boolean sendEmail(String to, String subject, String htmlContent) {
+        // Convert plain text newlines to HTML breaks for text templates
+        htmlContent = htmlContent.replace("\r\n", "<br/>").replace("\n", "<br/>");
+        htmlContent = htmlContent.replaceAll(
+            "(https?://[^\s<>]+)",
+            "<a href=\"$1\" style=\"color:#667eea;text-decoration:underline;\">$1</a>"
+        );
         JavaMailSender s = getMailSender();
         if (s == null) {
             log.info("[MOCK EMAIL] To: {}, Subject: {}", to, subject);

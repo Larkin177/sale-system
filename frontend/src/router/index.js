@@ -85,6 +85,24 @@ const routes = [
     component: () => import('../views/sales/Leaderboard.vue'),
     meta: { requiresAuth: true, role: 'sales' }
   },
+  {
+    path: '/s/forgot-password',
+    name: 'SalesForgotPassword',
+    component: () => import('../views/sales/ForgotPassword.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/s/commission',
+    name: 'SalesCommission',
+    component: () => import('../views/sales/Commission.vue'),
+    meta: { requiresAuth: true, role: 'sales' }
+  },
+  {
+    path: '/s/payment-code',
+    name: 'SalesPaymentCode',
+    component: () => import('../views/sales/PaymentCode.vue'),
+    meta: { requiresAuth: true, role: 'sales' }
+  },
   // 管理端
   {
     path: '/admin/login',
@@ -143,6 +161,12 @@ const routes = [
     path: '/admin/packages',
     name: 'AdminPackages',
     component: () => import('../views/admin/Packages.vue'),
+    meta: { requiresAuth: true, role: 'admin' }
+  },
+  {
+    path: '/admin/email',
+    name: 'EmailSettings',
+    component: () => import('../views/admin/EmailSettings.vue'),
     meta: { requiresAuth: true, role: 'admin' }
   }
 ]

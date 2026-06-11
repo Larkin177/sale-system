@@ -5,7 +5,7 @@
       <div class="nav-inner">
         <span class="nav-brand" @click="$router.push('/')">{{ siteName || 'CC-Installer' }}</span>
         <div class="nav-links">
-          <el-button text size="small" @click="$router.push('/')">🏠 返回首页</el-button>
+          <el-button text size="small" class="back-home-btn" @click="$router.push('/')">返回首页</el-button>
         </div>
       </div>
     </nav>
@@ -237,9 +237,11 @@ function copyAuthCode(code) {
 }
 
 function handleDownload(o) {
-  // Try to open the download link from package config
-  // Currently we redirect to the order detail which has the download
-  ElMessage.info('下载功能开发中，请稍候...')
+  if (o.downloadUrl) {
+    window.open(o.downloadUrl, '_blank')
+  } else {
+    ElMessage.warning('暂无下载链接，请联系客服')
+  }
 }
 
 function refresh() {
@@ -533,10 +535,27 @@ onMounted(async () => {
   padding: 16px 20px;
 }
 
+/* Back home button */
+.back-home-btn {
+  color: #6b7280 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.5px;
+  transition: color 0.2s !important;
+}
+.back-home-btn:hover { color: #667eea !important; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .orders-body { padding: 24px 16px; }
   .page-title { font-size: 22px; }
   .email-form { padding: 20px; }
+  .order-card { border-radius: 12px; }
+  .order-head { padding: 12px 16px; }
+  .order-body { padding: 12px 16px; }
+  .auth-section { padding: 12px 16px; }
+  .auth-code-box { flex-direction: column; gap: 8px; }
+  .auth-code-text { font-size: 11px; }
+  .copy-btn { width: 100%; }
 }
 </style>

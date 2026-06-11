@@ -69,4 +69,8 @@ public class Order {
     private String reviewNote;
 
     private LocalDateTime reviewedAt;
+
+    // 非数据库字段
+    @TableField(exist = false)
+    private String salesName;
 }

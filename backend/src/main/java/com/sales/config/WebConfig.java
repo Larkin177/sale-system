@@ -19,7 +19,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // 映射上传目录为静态资源，使用绝对路径
         String absolutePath = Paths.get(uploadDir).toAbsolutePath().normalize().toUri().toString();
-        registry.addResourceHandler("/uploads/**")
+        registry.addResourceHandler("/downloads/**")
                 .addResourceLocations(absolutePath);
     }
 

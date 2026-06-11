@@ -107,7 +107,18 @@
             <div style="font-size: 12px; color: #909399; margin-top: 4px;">销售生成推广链接时的自定义价格范围</div>
           </el-form-item>
           <el-form-item label="下载链接">
-            <el-input v-model="form.downloadUrl" placeholder="软件下载地址URL" />
+            <div style="display: flex; gap: 8px;">
+              <el-input v-model="form.downloadUrl" placeholder="软件下载地址URL" style="flex: 1" />
+              <el-upload
+                :action="uploadUrl"
+                :headers="uploadHeaders"
+                :on-success="handleDownloadUploaded"
+                :show-file-list="false"
+                accept=".zip,.rar,.7z,.exe,.msi,.dmg,.pkg,.tar.gz,.gz"
+              >
+                <el-button size="small" type="primary">上传文件</el-button>
+              </el-upload>
+            </div>
           </el-form-item>
           <el-form-item label="授权码">
             <el-switch v-model="form.authEnabled" />
@@ -215,6 +226,13 @@ const openDialog = (row) => {
     })
   }
   dialogVisible.value = true
+}
+
+const handleDownloadUploaded = (res) => {
+  if (res.data?.url) {
+    form.downloadUrl = res.data.url
+    ElMessage.success('文件上传成功')
+  }
 }
 
 const savePackage = async () => {

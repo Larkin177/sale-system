@@ -102,11 +102,21 @@ public class SalesService {
                 new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, "default_commission_rate"));
         BigDecimal rate = config != null ? new BigDecimal(config.getConfigValue()) : new BigDecimal("10");
 
+        // 检查邮箱是否已存在
+        if (request.getEmail() != null && !request.getEmail().isEmpty()) {
+            LambdaQueryWrapper<Sales> emailCheck = new LambdaQueryWrapper<>();
+            emailCheck.eq(Sales::getEmail, request.getEmail());
+            if (salesMapper.selectCount(emailCheck) > 0) {
+                return ApiResponse.error("该邮箱已注册");
+            }
+        }
+
         Sales sales = new Sales();
         sales.setName(request.getName());
+        sales.setEmail(request.getEmail());
         sales.setPhone(request.getPhone());
         sales.setPassword(passwordEncoder.encode(request.getPassword()));
-        sales.setCode(generateCode());
+        sales.setCode(request.getCode() != null && !request.getCode().isEmpty() ? request.getCode() : generateCode());
         sales.setCommissionRate(rate);
         sales.setStatus("active");
 

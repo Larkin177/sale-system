@@ -16,7 +16,7 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true
       },
-      '/uploads': {
+      '/downloads': {
         target: 'http://localhost:8080',
         changeOrigin: true
       }
