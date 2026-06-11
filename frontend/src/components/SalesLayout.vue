@@ -44,13 +44,13 @@
             <span>推广链接</span>
           </el-menu-item>
           <el-menu-item index="/s/claim">
-            <el-icon><Claim /></el-icon>
+            <el-icon><Collection /></el-icon>
             <span>认领订单</span>
           </el-menu-item>
-          <el-menu-item index="/s/leaderboard">
+          <!-- el-menu-item index="/s/leaderboard">
             <el-icon><Trophy /></el-icon>
             <span>排行榜</span>
-          </el-menu-item>
+          </el-menu-item -->
           <el-menu-item index="/s/commission">
             <el-icon><Coin /></el-icon>
             <span>分润结算</span>

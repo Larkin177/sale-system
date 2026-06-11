@@ -7,11 +7,11 @@
         <el-form-item label="订单号" prop="orderNo">
           <el-input v-model="form.orderNo" placeholder="请输入订单号" />
         </el-form-item>
-        <el-form-item label="客户手机号" prop="phone">
-          <el-input v-model="form.phone" placeholder="手机号（二选一）" />
-        </el-form-item>
         <el-form-item label="客户邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="邮箱地址（二选一）" />
+          <el-input v-model="form.email" placeholder="请输入客户邮箱" />
+        </el-form-item>
+        <el-form-item label="客户手机号" prop="phone">
+          <el-input v-model="form.phone" placeholder="手机号（选填）" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleClaim" :loading="loading">
@@ -63,7 +63,7 @@ const form = ref({
 
 const rules = {
   orderNo: [{ required: true, message: '请输入订单号', trigger: 'blur' }],
-  phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }]
+  email: [{ required: true, message: '请输入客户邮箱', trigger: 'blur' }]
 }
 
 const loadUnclaimed = async () => {
@@ -85,10 +85,10 @@ const handleClaim = async () => {
   try {
     await request.post('/orders/claim', form.value)
     ElMessage.success('认领成功')
-    form.value = { orderNo: '', phone: '' }
+    form.value = { orderNo: '', email: '', phone: '' }
     loadUnclaimed()
   } catch (e) {
-    console.error('认领失败')
+    ElMessage.error(e.response?.data?.message || '认领失败')
   } finally {
     loading.value = false
   }

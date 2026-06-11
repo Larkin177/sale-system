@@ -12,8 +12,8 @@ import java.util.Map;
 @Mapper
 public interface OrderMapper extends BaseMapper<Order> {
 
-    @Update("UPDATE orders SET sales_id = #{salesId}, claimed_at = NOW(), status = 'bound' " +
-            "WHERE id = #{orderId} AND sales_id IS NULL AND status = 'paid'")
+    @Update("UPDATE orders SET sales_id = #{salesId}, claimed_at = NOW() " +
+            "WHERE id = #{orderId} AND sales_id IS NULL AND status IN ('paid', 'pending_verify', 'delivered')")
     int claimOrder(@Param("orderId") Long orderId, @Param("salesId") Long salesId);
 
     @Select("SELECT amount, sales_id, order_no, created_at FROM orders WHERE customer_phone = #{phone} AND status IN ('paid','delivered','redeemed','bound','settled') ORDER BY created_at DESC LIMIT 1")

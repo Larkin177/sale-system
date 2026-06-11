@@ -171,7 +171,7 @@ public class WebhookController {
             }
 
             // 获取产品配置的授权有效期
-            int validityHours = 72;
+            int validityHours = 24;
             Product product = productMapper.selectById(order.getProductId());
             if (product != null) {
                 if (product.getAuthValidityHours() != null) {
@@ -225,7 +225,7 @@ public class WebhookController {
             template = "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;\"><h2 style=\"color:#667eea;\">{product_name} - 订单已发货</h2><p>感谢您的购买！</p><p><strong>订单号：</strong>{order_no}</p><p><strong>授权码：</strong><code style=\"background:#f3f4f6;padding:4px 8px;border-radius:4px;\">{auth_code}</code></p><p>🔐 授权码有效期 {hours} 小时，一机一码</p><a href=\"{download_url}\" style=\"display:inline-block;padding:12px 24px;background:#667eea;color:white;text-decoration:none;border-radius:8px;margin:16px 0;\">📥 下载安装器</a></div>";
         }
 
-        int validityHours = 72;
+        int validityHours = 24;
         ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
         if (pkg != null && pkg.getAuthValidityHours() != null) {
             validityHours = pkg.getAuthValidityHours();

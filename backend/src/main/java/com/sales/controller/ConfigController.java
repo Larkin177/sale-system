@@ -24,6 +24,7 @@ public class ConfigController {
         publicConfig.put("product_page_subtitle", config.get("product_page_subtitle"));
         publicConfig.put("product_page_tips", config.get("product_page_tips"));
         publicConfig.put("default_commission_rate", config.get("default_commission_rate"));
+        publicConfig.put("qrcode_logo", config.get("qrcode_logo"));
         return ApiResponse.success(publicConfig);
     }
 

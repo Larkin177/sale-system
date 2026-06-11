@@ -21,9 +21,11 @@
         </el-form-item>
       </el-form>
 
-      <div class="qrcode-section">
-        <p>推广链接二维码：</p>
-        <canvas ref="qrcodeCanvas"></canvas>
+      <div class="qrcode-wrapper">
+        <div class="qrcode-box">
+          <canvas ref="qrcodeCanvas"></canvas>
+          <p class="qrcode-tip">扫码或复制链接分享给客户</p>
+        </div>
       </div>
     </el-card>
   </SalesLayout>
@@ -39,9 +41,9 @@ import request from '@/utils/request'
 
 const authStore = useAuthStore()
 const qrcodeCanvas = ref(null)
+const logoUrl = ref('')
 
 const salesCode = ref('')
-// 无需选择套餐，客户点击链接后可自由选择
 
 const link = computed(() => {
   const base = window.location.origin
@@ -49,19 +51,75 @@ const link = computed(() => {
   return `${base}/?s=${salesCode.value}`
 })
 
+async function drawLogoOnCanvas(canvas) {
+  if (!logoUrl.value) return
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  await new Promise((resolve, reject) => {
+    img.onload = resolve
+    img.onerror = reject
+    img.src = logoUrl.value
+  })
+  const ctx = canvas.getContext('2d')
+  const size = canvas.width
+  const logoSize = size * 0.24
+  const x = (size - logoSize) / 2
+  const y = (size - logoSize) / 2
+
+  // 白色背景 + 阴影
+  ctx.shadowColor = 'rgba(0,0,0,0.12)'
+  ctx.shadowBlur = 8
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 2
+  ctx.fillStyle = '#ffffff'
+  const radius = 8
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + logoSize - radius, y)
+  ctx.quadraticCurveTo(x + logoSize, y, x + logoSize, y + radius)
+  ctx.lineTo(x + logoSize, y + logoSize - radius)
+  ctx.quadraticCurveTo(x + logoSize, y + logoSize, x + logoSize - radius, y + logoSize)
+  ctx.lineTo(x + radius, y + logoSize)
+  ctx.quadraticCurveTo(x, y + logoSize, x, y + logoSize - radius)
+  ctx.lineTo(x, y + radius)
+  ctx.quadraticCurveTo(x, y, x + radius, y)
+  ctx.closePath()
+  ctx.fill()
+
+  // 画图标（留内边距）
+  ctx.shadowColor = 'transparent'
+  const pad = logoSize * 0.12
+  ctx.drawImage(img, x + pad, y + pad, logoSize - pad * 2, logoSize - pad * 2)
+}
+
+async function drawQRCode() {
+  if (!qrcodeCanvas.value || !link.value) return
+  await QRCode.toCanvas(qrcodeCanvas.value, link.value, {
+    width: 240,
+    margin: 2,
+    color: { dark: '#1a1a2e', light: '#ffffff' }
+  })
+  if (logoUrl.value) {
+    await drawLogoOnCanvas(qrcodeCanvas.value).catch(() => {})
+  }
+}
+
 onMounted(async () => {
   salesCode.value = authStore.userInfo?.code || ''
+  try {
+    const res = await request.get('/config')
+    if (res.data?.qrcode_logo) {
+      logoUrl.value = res.data.qrcode_logo
+    }
+  } catch(e) {}
+  await nextTick()
+  await drawQRCode()
 })
 
-watch(link, async (val) => {
+watch(link, async () => {
   await nextTick()
-  if (qrcodeCanvas.value && val) {
-    QRCode.toCanvas(qrcodeCanvas.value, val, {
-      width: 200,
-      margin: 2
-    })
-  }
-}, { immediate: true })
+  drawQRCode()
+})
 
 const copyCode = () => {
   navigator.clipboard.writeText(salesCode.value)
@@ -78,19 +136,29 @@ const copyLink = () => {
 .link-card {
   max-width: 600px;
 }
-.price-range {
-  margin-left: 10px;
-  color: #999;
-  font-size: 14px;
+.qrcode-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
 }
-.qrcode-section {
+.qrcode-box {
   text-align: center;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  display: inline-block;
 }
-.qrcode-section p {
-  margin-bottom: 15px;
-  color: #666;
+.qrcode-box canvas {
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+.qrcode-tip {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #909399;
 }
 </style>

@@ -476,3 +476,252 @@ Body: { code, codeId, version: "sale-system" }
 - 域名：`auth.wonderhow.store`
 - DNS：Cloudflare 管理（NS: `novalee.ns.cloudflare.com` / `rayden.ns.cloudflare.com`）
 - Worker 绑定：Settings → Domains & Routes → Custom Domain
+
+---
+
+# v4.1 更新文档（2026-06-11 晚）
+
+> 注意：以下改动基于 v4 基础版本（commit `57d669f`）之后的增量修改。
+
+---
+
+## 8. 数据库变更（v4.1）
+
+### 8.1 新建表
+
+```sql
+-- 分润比例变更日志表
+CREATE TABLE commission_rate_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sales_id BIGINT NOT NULL COMMENT '销售ID',
+  old_rate DECIMAL(5,2) NOT NULL COMMENT '变更前比例',
+  new_rate DECIMAL(5,2) NOT NULL COMMENT '变更后比例',
+  created_by BIGINT COMMENT '操作管理员ID',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_sales_id (sales_id)
+);
+```
+
+### 8.2 SQL 种子数据
+
+新增 `sql/seed-data.sql`：
+- 清空 orders / commissions，重置 product_packages 为干净 6 个套餐
+- 插入销售演示数据（周媛，40% 分润比例）
+- 系统配置默认分润比例 → 40%
+- 功能特性图标更新（零门槛→MagicStick，傻瓜式操作→Mouse，DeepSeek友好→Connection）
+
+---
+
+## 9. 后端新增（v4.1）
+
+### 9.1 新 API
+
+**`GET /api/sales/rate-logs?salesId=X`**
+- 功能：获取分润比例变更历史
+- 返回：`[{ id, salesId, oldRate, newRate, createdAt }]`
+- 文件：`SettlementController.java`
+
+### 9.2 新文件
+
+| 文件 | 说明 |
+|---|---|
+| `entity/CommissionRateLog.java` | 分润比例变更日志实体 |
+| `mapper/CommissionRateLogMapper.java` | 对应 MyBatis Plus Mapper |
+
+### 9.3 公开配置新增
+
+`GET /api/config` 新增返回 `qrcode_logo`（推广二维码中心图标 URL）
+- 文件：`ConfigController.java` / `ConfigService.java`
+
+---
+
+## 10. 后端修改（v4.1）
+
+### 10.1 SettlementController.java
+
+| 改动 | 说明 |
+|---|---|
+| 新增 `orderMapper` 依赖 | 用于查询订单数据计算总销售额 |
+| 新增 `enrichCommissions()` | 批量给佣金记录附带订单信息（orderNo, orderAmount, orderStatus, orderCreatedAt），消除 N+1 手动查询 |
+| 新增 `getTotalSales()` | 从 orders 表 SUM(amount) 计算销售总销售额 |
+| **summary 端点** | `totalSales` 改为从 orders 表查询（之前错赋值为 totalCommission） |
+| **detail 端点** | `totalSales` 修复为 0 的 bug，改为正确查询 orders 表 |
+| **detail 端点** | `commissions` 改为返回 `enrichCommissions()` 含订单详情 |
+| **detail 端点** | 新增返回 `settlementRecords`（结算记录含凭证） |
+| **settle 端点** | `POST /admin/commissions/settle` 改为直接完成结算（状态 `completed` + 同时标记待结算分润为已结算），之前需要两次调用（POST + PUT）才能完成 |
+| **settle 端点** | 返回 `{ id }` 让前端可继续上传凭证 |
+| **rate 端点** | `PUT /admin/sales/{id}/rate` 新增记录比例变更到 `commission_rate_logs` |
+
+### 10.2 CommissionService.java
+
+| 改动 | 说明 |
+|---|---|
+| 提取 `doCalculate()` | 将分润计算逻辑抽取为私有方法，消除重复代码 |
+| 新增 `calculateCommissionForClaim()` | 认领订单时计算分润，绕过订单状态和 sales_id 检查，由调用方传入 salesId |
+
+### 10.3 OrderService.java
+
+| 改动 | 说明 |
+|---|---|
+| `listUnclaimedOrders()` | 改为排除 `pending/rejected/settled` 状态（之前只查 `paid`），涵盖 `paid/pending_verify/delivered` |
+| `claimOrder()` | 改 email 为必填、phone 为选填 |
+| `claimOrder()` | 认领前调用 `calculateCommissionForClaim()` 计算分润 |
+
+### 10.4 OrderMapper.java
+
+| 改动 | 说明 |
+|---|---|
+| `claimOrder` SQL | 之前 `status = 'bound'` → **去掉 status 变更**，认领只绑定 sales_id + 记录认领时间，不修改订单状态 |
+| `claimOrder` SQL | 之前 `status = 'paid'` → 改为 `IN ('paid', 'pending_verify', 'delivered')` |
+
+### 10.5 SalesService.java
+
+| 改动 | 说明 |
+|---|---|
+| `updateSales()` | 新增比例变更检测，修改 commissionRate 时自动写入 `commission_rate_logs` |
+| 新增依赖 | `CommissionRateLogMapper` |
+
+### 10.6 ConfigService.java
+
+| 改动 | 说明 |
+|---|---|
+| `updateConfig()` | 之前只更新已有记录（新 key 存不进去），改为不存在时自动 INSERT |
+
+### 10.7 ClaimOrderRequest.java
+
+| 改动 | 说明 |
+|---|---|
+| phone | `@NotBlank` 改为无校验（选填） |
+| email | 从无校验改为 `@NotBlank`（必填） |
+
+### 10.8 WebConfig.java
+
+| 改动 | 说明 |
+|---|---|
+| 新增 `passwordEncoder()` Bean | 注册 `BCryptPasswordEncoder`，修复 `SalesAuthController` 因缺少 Bean 启动失败的问题 |
+
+### 10.9 授权有效期默认值改为 24 小时
+
+涉及 5 个文件，所有 `int validityHours = 72` 或 `: 72` 改为 `= 24` / `: 24`：
+
+| 文件 | 行数 |
+|---|---|
+| `WebhookController.java` | 2 处 (`= 72` → `= 24`) |
+| `AlipayController.java` | 1 处 |
+| `DeliveryController.java` | 2 处 (`: 72` → `: 24`) |
+| `AdminOrderController.java` | 2 处 |
+
+### 10.10 默认分润比例 10% → 40%
+
+`SalesService.java` 两处 `new BigDecimal("10")` → `new BigDecimal("40")`
+
+---
+
+## 11. 前端修改（v4.1）
+
+### 11.1 客户首页 `Home.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 购买弹窗邮箱 | `buyEmail` 不再从 localStorage 自动填充（消除了之前残留的"1114673990"） |
+| 功能特性图标 | 图标映射从 5 个扩展为 30+ 个（新增 MagicStick, Aim, Mouse, Connection, Headset 等） |
+
+### 11.2 系统配置 `Config.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 推广二维码图标 | 新增配置卡片：支持上传图片 / 输入 URL，保存到 `system_config.qrcode_logo` |
+| 二维码预览 | 上传后实时生成带图标的二维码预览（引入 `qrcode` 库在 canvas 上叠加图标） |
+
+### 11.3 站点设置 `SiteSettings.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 移除支付二维码 | 删除微信/支付宝收款码上传区块（已迁移到系统配置） |
+| 移除相关函数 | 删除 `handleQrcodeUpload()`、`wechat_qrcode`/`alipay_qrcode` 默认值及 CSS |
+| 图标选择器 | 从 5 个选项扩展为 30+ 个，加 `filterable` 支持搜索 |
+
+### 11.4 分润结算 `Settle.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 汇总表列 | 改为：销售姓名 / 推广码 / **总销售额** / **总佣金** / **已结算** / 当前分润比例 / 待结算 / 操作 |
+| 分润比例列 | 从可编辑 `el-input-number` 改为纯文字展示（编辑移至销售管理） |
+| 明细弹窗 | 加宽至 1000px；新增「结算记录」表格（含凭证预览）；分润列表列改为：序号 / 订单编号 / 订单金额 / 分润比例 / 分润金额 / 订单状态 / 订单创建时间 |
+| 分页 | 汇总表 + 明细弹窗佣金列表均新增分页 |
+
+### 11.5 销售端业绩概览 `Dashboard.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 分润统计 | 在原有 4 个统计卡片下方新增一行 4 个卡片（总佣金 / 已结算 / 待结算 / 当前分润比例） |
+| API | 新增请求 `/sales/commissions` 获取分润数据 |
+
+### 11.6 销售端分润结算 `Commission.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 结算记录 | 改为左右两栏布局（左 14/24 结算记录，右 10/24 分润比例变更记录） |
+| 比例变更记录 | 调用 `GET /api/sales/rate-logs`，显示变更前 / 变更后 / 变更时间 |
+| 分润明细列 | 改为：序号 / 订单编号 / 订单金额 / 分润比例 / 分润金额 / 订单状态 / 订单创建时间 |
+| 分页 | 分润明细列表新增分页 |
+
+### 11.7 推广链接 `Link.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 二维码尺寸 | 200px → 240px |
+| 颜色 | 深色块从纯黑改为 `#1a1a2e` |
+| Logo叠加 | 新增中心图标叠加（白色圆角背景 + 阴影效果 + 内边距） |
+| 样式 | 新增独立白卡片容器包裹二维码（圆角阴影） |
+
+### 11.8 认领订单 `Claim.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 邮箱 | 改为必填（置顶、加 required 规则） |
+| 手机号 | 改为选填（标注「选填」、去掉 required） |
+| 错误提示 | 捕获 API 错误并显示到界面上 |
+
+### 11.9 导航栏 `SalesLayout.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 排行榜 | 整块菜单注释掉（保留代码） |
+| 认领订单 | 图标从无效的 `Claim` 改为 `Collection`（Element Plus 内置） |
+
+### 11.10 订单管理 `Orders.vue`（管理端 + 销售端）
+
+| 改动 | 说明 |
+|---|---|
+| 分页布局 | `layout` 全部加上 `total`，左下角显示「共 X 条」 |
+
+### 11.11 套餐管理 `Packages.vue` + 教程管理 `Tutorials.vue`
+
+| 改动 | 说明 |
+|---|---|
+| `Packages.vue` | 分页加上 `total` |
+| `Tutorials.vue` | **新增**完整前端分页（每页10条），`page` + `total` + `paginatedTutorials` computed |
+
+### 11.12 销售端订单 `Orders.vue`
+
+| 改动 | 说明 |
+|---|---|
+| 状态映射 | 移除 `bound` 相关映射 |
+
+### 11.13 其他
+
+| 文件 | 改动 |
+|---|---|
+| `App.vue` | `<router-view>` 加 `:key="$route.fullPath"`，修复导航后页面不刷新的问题 |
+| `router/index.js` | 排行榜路由注释掉 |
+| `request.js` | 错误拦截器改为显示 `error.response?.data?.message`（之前只显示通用 "Request failed"） |
+| `SalesDetail.vue` / `Dashboard.vue` / `Orders.vue` | 移除所有 `bound` 状态映射（已废弃） |
+
+---
+
+## 12. 已知问题 / 待办
+
+- 推广二维码中心图标需在 系统配置 页面上传并保存后才生效
+- 已有 `bound` 状态的订单已手动更新为 `delivered`（2026-06-11）
+- `commission_rate_logs` 表中无历史数据，比例变更记录从本次部署后开始生成

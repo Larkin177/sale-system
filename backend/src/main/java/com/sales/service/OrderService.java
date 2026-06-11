@@ -30,6 +30,7 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final SalesMapper salesMapper;
     private final CustomerPriceMapper customerPriceMapper;
+    private final CommissionService commissionService;
 
     public Order createOrder(Long salesId, BigDecimal baseAmount) {
         Order order = new Order();
@@ -73,22 +74,27 @@ public class OrderService {
             return ApiResponse.error("销售不存在");
         }
 
-        // 支持手机号或邮箱验证
+        // 验证：邮箱必填，手机号可选
         String phone = request.getPhone();
         String email = request.getEmail();
         String orderPhone = order.getCustomerPhone();
         String orderEmail = order.getCustomerEmail();
 
+        if (email == null || email.isEmpty()) {
+            return ApiResponse.error("邮箱不能为空");
+        }
+        if (orderEmail == null || !orderEmail.equalsIgnoreCase(email)) {
+            return ApiResponse.error("邮箱不匹配");
+        }
         if (phone != null && !phone.isEmpty()) {
             if (orderPhone == null || !orderPhone.equals(phone)) {
                 return ApiResponse.error("手机号不匹配");
             }
-        } else if (email != null && !email.isEmpty()) {
-            if (orderEmail == null || !orderEmail.equalsIgnoreCase(email)) {
-                return ApiResponse.error("邮箱不匹配");
-            }
-        } else {
-            return ApiResponse.error("请提供客户手机号或邮箱");
+        }
+
+        // 认领前先计算分润（此时订单状态还是 paid/delivered）
+        if ("paid".equals(order.getStatus()) || "delivered".equals(order.getStatus())) {
+            commissionService.calculateCommissionForClaim(order.getId(), salesId);
         }
 
         // 尝试认领（原子操作）
@@ -120,7 +126,7 @@ public class OrderService {
         List<Order> orders = orderMapper.selectList(
                 new LambdaQueryWrapper<Order>()
                         .isNull(Order::getSalesId)
-                        .eq(Order::getStatus, "paid"));
+                        .notIn(Order::getStatus, "pending", "rejected", "settled"));
         return ApiResponse.success(orders);
     }
 

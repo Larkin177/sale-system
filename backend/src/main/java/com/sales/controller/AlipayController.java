@@ -136,7 +136,7 @@ public class AlipayController {
             }
 
             // 获取产品配置
-            int validityHours = 72;
+            int validityHours = 24;
             Product product = productMapper.selectById(order.getProductId());
             if (product != null) {
                 if (product.getAuthValidityHours() != null) {

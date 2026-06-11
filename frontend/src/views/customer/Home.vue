@@ -337,7 +337,15 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Trophy, Star, Service, Coin, Position, Download, Present, Notebook, VideoPlay, ArrowRight } from '@element-plus/icons-vue'
+import {
+  Trophy, Star, Service, Coin, Position,
+  Download, Present, Notebook, VideoPlay, ArrowRight,
+  MagicStick, Aim, Mouse, Connection, Headset,
+  Key, Medal, Promotion, Reading, School,
+  SetUp, ShoppingCart, Tools, TrendCharts, User,
+  Wallet, ChatLineSquare, DataBoard, Discount, SwitchFilled,
+  Sunny, Collection, Flag, Opportunity, Tickets
+} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import request from '@/utils/request'
@@ -375,7 +383,23 @@ const settings = ref({
   feature_3_content_value: ''
 })
 
-const iconMap = { trophy: Trophy, star: Star, service: Service, coin: Coin, position: Position, Trophy, Star, Service, Coin, Position }
+const iconMap = {
+  // 原有图标
+  trophy: Trophy, star: Star, service: Service, coin: Coin, position: Position,
+  Trophy, Star, Service, Coin, Position,
+  // 新增图标
+  magicstick: MagicStick, aim: Aim, mouse: Mouse, connection: Connection, headset: Headset,
+  key: Key, medal: Medal, promotion: Promotion, reading: Reading, school: School,
+  setup: SetUp, shoppingcart: ShoppingCart, tools: Tools, trendcharts: TrendCharts,
+  user: User, wallet: Wallet, chatlinesquare: ChatLineSquare, databoard: DataBoard,
+  discount: Discount, switchfilled: SwitchFilled, sunny: Sunny, collection: Collection,
+  flag: Flag, opportunity: Opportunity, tickets: Tickets,
+  MagicStick, Aim, Mouse, Connection, Headset,
+  Key, Medal, Promotion, Reading, School,
+  SetUp, ShoppingCart, Tools, TrendCharts, User,
+  Wallet, ChatLineSquare, DataBoard, Discount, SwitchFilled,
+  Sunny, Collection, Flag, Opportunity, Tickets
+}
 
 const featureList = computed(() => [
   {
@@ -461,7 +485,7 @@ function openTutorial(t) {
 const buyDialogVisible = ref(false)
 const buyStep = ref(1)
 const stepLoading = ref(false)
-const buyEmail = ref(localStorage.getItem('customer_email') || '')
+const buyEmail = ref('')
 
 // Captcha
 const captchaImage = ref('')

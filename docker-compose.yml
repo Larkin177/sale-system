@@ -35,8 +35,12 @@ services:
     depends_on:
       - mysql
       - redis
+    volumes:
+      - ./uploads:/app/uploads
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/sales_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
       - SPRING_DATA_REDIS_HOST=redis
 
   frontend:

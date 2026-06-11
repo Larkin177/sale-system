@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.sales.dto.ApiResponse;
 import com.sales.dto.SalesDTO;
 import com.sales.dto.SalesRegisterRequest;
+import com.sales.entity.CommissionRateLog;
 import com.sales.entity.Sales;
 import com.sales.entity.SystemConfig;
+import com.sales.mapper.CommissionRateLogMapper;
 import com.sales.mapper.SalesMapper;
 import com.sales.mapper.SystemConfigMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class SalesService {
 
     private final SalesMapper salesMapper;
     private final SystemConfigMapper systemConfigMapper;
+    private final CommissionRateLogMapper commissionRateLogMapper;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public ApiResponse<Sales> createSales(SalesDTO dto) {
@@ -36,7 +39,7 @@ public class SalesService {
         // 获取默认分润比例
         SystemConfig config = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, "default_commission_rate"));
-        BigDecimal rate = config != null ? new BigDecimal(config.getConfigValue()) : new BigDecimal("10");
+        BigDecimal rate = config != null ? new BigDecimal(config.getConfigValue()) : new BigDecimal("40");
 
         Sales sales = new Sales();
         sales.setName(dto.getName());
@@ -65,7 +68,18 @@ public class SalesService {
         }
 
         if (dto.getName() != null) sales.setName(dto.getName());
-        if (dto.getCommissionRate() != null) sales.setCommissionRate(dto.getCommissionRate());
+        if (dto.getCommissionRate() != null) {
+            BigDecimal oldRate = sales.getCommissionRate();
+            sales.setCommissionRate(dto.getCommissionRate());
+            // 记录比例变更
+            if (oldRate.compareTo(dto.getCommissionRate()) != 0) {
+                CommissionRateLog log = new CommissionRateLog();
+                log.setSalesId(id);
+                log.setOldRate(oldRate);
+                log.setNewRate(dto.getCommissionRate());
+                commissionRateLogMapper.insert(log);
+            }
+        }
         if (dto.getPassword() != null && !dto.getPassword().isEmpty()) {
             sales.setPassword(passwordEncoder.encode(dto.getPassword()));
         }
@@ -100,7 +114,7 @@ public class SalesService {
         // 获取默认分润比例
         SystemConfig config = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, "default_commission_rate"));
-        BigDecimal rate = config != null ? new BigDecimal(config.getConfigValue()) : new BigDecimal("10");
+        BigDecimal rate = config != null ? new BigDecimal(config.getConfigValue()) : new BigDecimal("40");
 
         // 检查邮箱是否已存在
         if (request.getEmail() != null && !request.getEmail().isEmpty()) {

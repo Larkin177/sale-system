@@ -3,7 +3,7 @@ server:
 
 # 文件上传配置
 upload:
-  dir: E:/DevEnv/project/sales-system/uploads
+  dir: /app/uploads
 
 spring:
   # 文件上传配置

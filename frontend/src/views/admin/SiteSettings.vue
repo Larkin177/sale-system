@@ -67,12 +67,37 @@
             <h4 class="feature-label">特性 {{ feat }}</h4>
             <el-form :model="settings" label-width="100px" label-position="left">
               <el-form-item label="图标">
-                <el-select v-model="settings[`feature_${feat}_icon`]" style="width: 100%">
+                <el-select v-model="settings[`feature_${feat}_icon`]" style="width: 100%" filterable>
+                  <el-option label="MagicStick (魔法棒)" value="MagicStick" />
+                  <el-option label="Aim (瞄准)" value="Aim" />
+                  <el-option label="Mouse (鼠标)" value="Mouse" />
+                  <el-option label="Connection (连接)" value="Connection" />
+                  <el-option label="Headset (耳机)" value="Headset" />
                   <el-option label="Trophy (奖杯)" value="Trophy" />
                   <el-option label="Star (星星)" value="Star" />
                   <el-option label="Service (客服)" value="Service" />
                   <el-option label="Coin (金币)" value="Coin" />
                   <el-option label="Position (定位)" value="Position" />
+                  <el-option label="Key (钥匙)" value="Key" />
+                  <el-option label="Medal (奖牌)" value="Medal" />
+                  <el-option label="Promotion (推广)" value="Promotion" />
+                  <el-option label="Reading (阅读)" value="Reading" />
+                  <el-option label="School (学校)" value="School" />
+                  <el-option label="SetUp (设置)" value="SetUp" />
+                  <el-option label="ShoppingCart (购物车)" value="ShoppingCart" />
+                  <el-option label="Tools (工具)" value="Tools" />
+                  <el-option label="TrendCharts (趋势)" value="TrendCharts" />
+                  <el-option label="User (用户)" value="User" />
+                  <el-option label="Wallet (钱包)" value="Wallet" />
+                  <el-option label="ChatLineSquare (聊天)" value="ChatLineSquare" />
+                  <el-option label="DataBoard (数据)" value="DataBoard" />
+                  <el-option label="Discount (折扣)" value="Discount" />
+                  <el-option label="SwitchFilled (开关)" value="SwitchFilled" />
+                  <el-option label="Sunny (晴天)" value="Sunny" />
+                  <el-option label="Collection (收藏)" value="Collection" />
+                  <el-option label="Flag (旗帜)" value="Flag" />
+                  <el-option label="Opportunity (机会)" value="Opportunity" />
+                  <el-option label="Tickets (票券)" value="Tickets" />
                 </el-select>
               </el-form-item>
               <el-form-item label="自定义图标">
@@ -193,52 +218,6 @@
           </el-form>
         </el-card>
 
-        <!-- 支付二维码 -->
-        <el-card class="settings-card">
-          <template #header>
-            <div class="card-header">
-              <el-icon><Picture /></el-icon>
-              <span>支付二维码</span>
-            </div>
-          </template>
-          <el-form label-position="top">
-            <el-form-item label="微信收款码">
-              <div class="qrcode-upload-row">
-                <el-upload
-                  class="qrcode-uploader"
-                  action="/api/admin/upload"
-                  :show-file-list="false"
-                  :on-success="(res) => handleQrcodeUpload('wechat_qrcode', res)"
-                  :before-upload="beforeUpload"
-                  accept="image/*"
-                >
-                  <img v-if="settings.wechat_qrcode" :src="settings.wechat_qrcode" class="qrcode-preview" />
-                  <el-icon v-else class="qrcode-uploader-icon"><Plus /></el-icon>
-                </el-upload>
-                <el-input v-model="settings.wechat_qrcode" placeholder="或输入图片URL" class="qrcode-url-input" />
-              </div>
-              <div class="field-hint">上传您的微信收款二维码图片</div>
-            </el-form-item>
-            <el-form-item label="支付宝收款码">
-              <div class="qrcode-upload-row">
-                <el-upload
-                  class="qrcode-uploader"
-                  action="/api/admin/upload"
-                  :show-file-list="false"
-                  :on-success="(res) => handleQrcodeUpload('alipay_qrcode', res)"
-                  :before-upload="beforeUpload"
-                  accept="image/*"
-                >
-                  <img v-if="settings.alipay_qrcode" :src="settings.alipay_qrcode" class="qrcode-preview" />
-                  <el-icon v-else class="qrcode-uploader-icon"><Plus /></el-icon>
-                </el-upload>
-                <el-input v-model="settings.alipay_qrcode" placeholder="或输入图片URL" class="qrcode-url-input" />
-              </div>
-              <div class="field-hint">上传您的支付宝收款二维码图片</div>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
         <!-- Save Button -->
         <div class="save-bar">
           <el-button type="primary" size="large" @click="saveSettings" :loading="saving">
@@ -283,11 +262,21 @@
 import { ref, onMounted } from 'vue'
 import AdminLayout from '@/components/AdminLayout.vue'
 import { ElMessage } from 'element-plus'
-import { Trophy, Star, Service, Coin, Position, InfoFilled, Picture, Grid, Document, Check, Plus } from '@element-plus/icons-vue'
+import { Trophy, Star, Service, Coin, Position, InfoFilled, Picture, Grid, Document, Check, Plus,
+  MagicStick, Aim, Mouse, Connection, Headset, Key, Medal, Promotion, Reading, School,
+  SetUp, ShoppingCart, Tools, TrendCharts, User, Wallet, ChatLineSquare, DataBoard,
+  Discount, SwitchFilled, Sunny, Collection, Flag, Opportunity, Tickets
+} from '@element-plus/icons-vue'
 import { getAdminSiteSettings, updateSiteSettings } from '@/api/config'
 import { refreshSiteName } from '@/router/index.js'
 
-const iconMap = { Trophy, Star, Service, Coin, Position }
+const iconMap = { Trophy, Star, Service, Coin, Position,
+  MagicStick, Aim, Mouse, Connection, Headset,
+  Key, Medal, Promotion, Reading, School,
+  SetUp, ShoppingCart, Tools, TrendCharts, User,
+  Wallet, ChatLineSquare, DataBoard, Discount, SwitchFilled,
+  Sunny, Collection, Flag, Opportunity, Tickets
+}
 const saving = ref(false)
 
 const settings = ref({
@@ -320,8 +309,6 @@ const settings = ref({
   pay_subtitle: '',
   download_title: '下载软件',
   download_subtitle: '',
-  wechat_qrcode: '',
-  alipay_qrcode: ''
 })
 
 const getContentPlaceholder = (type) => {
@@ -518,51 +505,6 @@ const beforeFileUpload = (file) => {
 
 .save-bar {
   padding: 20px 0;
-}
-
-/* 二维码上传样式 */
-.qrcode-upload-row {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.qrcode-uploader {
-  flex-shrink: 0;
-}
-
-.qrcode-uploader :deep(.el-upload) {
-  border: 1px dashed #dcdfe6;
-  border-radius: 8px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.3s;
-}
-
-.qrcode-uploader :deep(.el-upload:hover) {
-  border-color: #409eff;
-}
-
-.qrcode-preview {
-  width: 120px;
-  height: 120px;
-  display: block;
-  object-fit: contain;
-}
-
-.qrcode-uploader-icon {
-  font-size: 28px;
-  color: #8c939d;
-  width: 120px;
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.qrcode-url-input {
-  flex: 1;
 }
 
 /* 图标上传样式 */

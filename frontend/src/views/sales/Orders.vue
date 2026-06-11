@@ -27,7 +27,7 @@
       v-model:current-page="page"
       :page-size="10"
       :total="total"
-      layout="prev, pager, next"
+      layout="total, prev, pager, next"
       @current-change="loadOrders"
     />
   </SalesLayout>
@@ -53,12 +53,12 @@ const loadOrders = async () => {
 }
 
 const getStatusType = (status) => {
-  const map = { pending: 'info', paid: 'success', bound: 'warning', settled: '' }
+  const map = { pending: 'info', paid: 'success', settled: '' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待支付', paid: '已支付', bound: '已绑定', settled: '已结算' }
+  const map = { pending: '待支付', paid: '已支付', settled: '已结算' }
   return map[status] || status
 }
 

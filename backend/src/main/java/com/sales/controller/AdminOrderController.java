@@ -214,7 +214,7 @@ public class AdminOrderController {
             }
 
             // 获取授权有效期（优先使用套餐配置）
-            int validityHours = pkg != null && pkg.getAuthValidityHours() != null ? pkg.getAuthValidityHours() : 72;
+            int validityHours = pkg != null && pkg.getAuthValidityHours() != null ? pkg.getAuthValidityHours() : 24;
 
             // 产品名称
             String productName = order.getProductName();
@@ -337,7 +337,7 @@ public class AdminOrderController {
         }
 
         // 获取授权有效期
-        int validityHours = 72;
+        int validityHours = 24;
         ProductPackage pkg = order.getPackageId() != null ? productPackageMapper.selectById(order.getPackageId()) : null;
         if (pkg != null && pkg.getAuthValidityHours() != null) {
             validityHours = pkg.getAuthValidityHours();

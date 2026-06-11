@@ -34,7 +34,22 @@ public class CommissionService {
             return;
         }
 
-        // 计算分润
+        doCalculate(order, sales);
+    }
+
+    /**
+     * 认领订单时计算分润（订单可能已是 delivered 状态，salesId 由参数传入）
+     */
+    @Transactional
+    public void calculateCommissionForClaim(Long orderId, Long salesId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) return;
+        Sales sales = salesMapper.selectById(salesId);
+        if (sales == null) return;
+        doCalculate(order, sales);
+    }
+
+    private void doCalculate(Order order, Sales sales) {
         // commissionRate 表示销售分润比例（如10表示销售拿10%）
         BigDecimal rate = sales.getCommissionRate().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
         BigDecimal salesAmount = order.getAmount().multiply(rate).setScale(2, RoundingMode.HALF_UP);
@@ -42,8 +57,8 @@ public class CommissionService {
 
         // 创建分润记录
         Commission commission = new Commission();
-        commission.setOrderId(orderId);
-        commission.setSalesId(order.getSalesId());
+        commission.setOrderId(order.getId());
+        commission.setSalesId(sales.getId());
         commission.setAmount(salesAmount);
         commission.setAdminAmount(platformAmount);
         commission.setRate(sales.getCommissionRate());

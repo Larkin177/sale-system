@@ -35,6 +35,11 @@ public class ConfigService {
         if (config != null) {
             config.setConfigValue(value);
             systemConfigMapper.updateById(config);
+        } else {
+            config = new SystemConfig();
+            config.setConfigKey(key);
+            config.setConfigValue(value);
+            systemConfigMapper.insert(config);
         }
     }
 }

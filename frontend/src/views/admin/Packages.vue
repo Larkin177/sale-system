@@ -65,7 +65,7 @@
           v-model:current-page="page"
           :page-size="20"
           :total="total"
-          layout="prev, pager, next"
+          layout="total, prev, pager, next"
           @current-change="loadPackages"
           style="margin-top: 16px; justify-content: center;"
         />

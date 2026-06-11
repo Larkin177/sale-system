@@ -116,7 +116,7 @@
       v-model:current-page="page"
       :page-size="10"
       :total="total"
-      layout="prev, pager, next"
+      layout="total, prev, pager, next"
       @current-change="loadOrders"
     />
 
@@ -391,12 +391,12 @@ const doRejectPayment = async () => {
 }
 
 const getStatusType = (status) => {
-  const map = { pending: 'info', pending_verify: 'warning', paid: 'success', delivered: 'success', redeemed: '', bound: 'warning', settled: '', rejected: 'danger' }
+  const map = { pending: 'info', pending_verify: 'warning', paid: 'success', delivered: 'success', redeemed: '', settled: '', rejected: 'danger' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待支付', pending_verify: '待审核', paid: '已付款', delivered: '已发货', redeemed: '已核销', bound: '已绑定', settled: '已结算', rejected: '已拒绝' }
+  const map = { pending: '待支付', pending_verify: '待审核', paid: '已付款', delivered: '已发货', redeemed: '已核销', settled: '已结算', rejected: '已拒绝' }
   return map[status] || status
 }
 

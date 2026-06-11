@@ -60,7 +60,7 @@ public class DeliveryController {
         // 生成或使用已有授权码
         String authCode = order.getAuthCode();
         if (authCode == null || authCode.isEmpty()) {
-            int validityHours = pkg != null && pkg.getAuthValidityHours() != null ? pkg.getAuthValidityHours() : 72;
+            int validityHours = pkg != null && pkg.getAuthValidityHours() != null ? pkg.getAuthValidityHours() : 24;
             authCode = authCodeService.generateAuthCode(order.getId(), validityHours);
         }
 

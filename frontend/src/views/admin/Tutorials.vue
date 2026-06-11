@@ -5,7 +5,7 @@
       <el-button type="primary" @click="openDialog(null)">新增教程</el-button>
     </div>
 
-    <el-table :data="tutorials" stripe>
+    <el-table :data="paginatedTutorials" stripe>
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="title" label="标题" min-width="150" />
       <el-table-column prop="category" label="分类" width="130">
@@ -37,6 +37,14 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      layout="total, prev, pager, next"
+      style="margin-top:16px;"
+    />
 
     <!-- Add/Edit Dialog -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑教程' : '新增教程'" width="650px" destroy-on-close>
@@ -164,13 +172,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import AdminLayout from '@/components/AdminLayout.vue'
 import { ElMessage } from 'element-plus'
 import request from '@/utils/request'
 
 const tutorials = ref([])
 const categories = ref([])
+const page = ref(1)
+const pageSize = ref(10)
+const total = computed(() => tutorials.value.length)
+const paginatedTutorials = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return tutorials.value.slice(start, start + pageSize.value)
+})
 const categoryDialog = ref(false)
 const categoryForm = ref({ id: null, name: '', slug: '', sortOrder: 0 })
 const dialogVisible = ref(false)
@@ -263,6 +278,7 @@ async function deleteCategory(id) {
 async function loadTutorials() {
   const res = await request.get('/admin/tutorials')
   tutorials.value = res.data || []
+  page.value = 1
 }
 
 async function handleSave() {

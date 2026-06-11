@@ -79,12 +79,12 @@ const routes = [
     component: () => import('../views/sales/Claim.vue'),
     meta: { requiresAuth: true, role: 'sales' }
   },
-  {
-    path: '/s/leaderboard',
-    name: 'SalesLeaderboard',
-    component: () => import('../views/sales/Leaderboard.vue'),
-    meta: { requiresAuth: true, role: 'sales' }
-  },
+  // {
+  //   path: '/s/leaderboard',
+  //   name: 'SalesLeaderboard',
+  //   component: () => import('../views/sales/Leaderboard.vue'),
+  //   meta: { requiresAuth: true, role: 'sales' }
+  // },
   {
     path: '/s/forgot-password',
     name: 'SalesForgotPassword',

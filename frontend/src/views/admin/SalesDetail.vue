@@ -156,12 +156,12 @@ const loadOrders = async () => {
 }
 
 const getStatusType = (status) => {
-  const map = { pending: 'info', paid: 'success', delivered: 'success', redeemed: '', bound: 'warning', settled: '' }
+  const map = { pending: 'info', paid: 'success', delivered: 'success', redeemed: '', settled: '' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待支付', paid: '已支付', delivered: '已发货', redeemed: '已核销', bound: '已绑定', settled: '已结算' }
+  const map = { pending: '待支付', paid: '已支付', delivered: '已发货', redeemed: '已核销', settled: '已结算' }
   return map[status] || status
 }
 
