@@ -1,49 +1,79 @@
 <template>
   <SalesLayout>
-    <h2>我的推广链接</h2>
+    <h2>我的推广</h2>
 
-    <el-card class="link-card">
-      <el-form label-width="100px">
-        <el-form-item label="我的推广码">
-          <el-input v-model="salesCode" readonly>
-            <template #append>
-              <el-button @click="copyCode">复制</el-button>
-            </template>
-          </el-input>
-        </el-form-item>
+    <div class="promotion-page">
+      <div class="promo-card">
+        <!-- ========== QR Code + Brand ========== -->
+        <div class="promo-body">
+          <div class="qr-section">
+            <!-- QR code with integrated brand bar -->
+            <div ref="qrFrameRef" class="qr-frame">
+              <div class="qr-stage">
+                <div ref="qrContainer" class="qr-code-svg"></div>
+                <!-- Logo badge: rounded square with logo only -->
+                <div v-if="logoUrl" class="qr-logo-badge">
+                  <div class="qr-logo-badge-inner">
+                    <img :src="logoUrl" alt="logo" class="qr-logo-img" />
+                  </div>
+                </div>
+              </div>
+              <!-- Brand area: full-width line + brand name -->
+              <div class="qr-brand">
+                <div class="qr-brand-line"></div>
+                <span class="qr-brand-text">CC-INSTALLER</span>
+              </div>
+            </div>
+            <p class="qr-hint">
+              <el-icon><Iphone /></el-icon>
+              扫码或分享链接给客户
+            </p>
+            <el-button class="save-qr-btn" size="small" plain @click="saveQR">
+              <el-icon><Download /></el-icon> 保存二维码
+            </el-button>
+          </div>
 
-        <el-form-item label="推广链接">
-          <el-input v-model="link" readonly>
-            <template #append>
-              <el-button @click="copyLink">复制</el-button>
-            </template>
-          </el-input>
-        </el-form-item>
-      </el-form>
+          <div class="promo-divider"></div>
 
-      <div class="qrcode-wrapper">
-        <div class="qrcode-box">
-          <canvas ref="qrcodeCanvas"></canvas>
-          <p class="qrcode-tip">扫码或复制链接分享给客户</p>
+          <!-- Sales Info -->
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-label">推广码</span>
+              <div class="info-value">
+                <code class="info-code">{{ salesCode }}</code>
+                <el-button size="small" type="primary" plain @click="copyCode">复制</el-button>
+              </div>
+            </div>
+            <div class="info-row">
+              <span class="info-label">推广链接</span>
+              <div class="info-value">
+                <span class="info-link">{{ link }}</span>
+                <el-button size="small" type="primary" plain @click="copyLink">复制</el-button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </el-card>
+    </div>
   </SalesLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import SalesLayout from '@/components/SalesLayout.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
-import QRCode from 'qrcode'
+import { Iphone, Download } from '@element-plus/icons-vue'
+import QRCodeStyling from 'qr-code-styling'
 import request from '@/utils/request'
+import html2canvas from 'html2canvas'
 
 const authStore = useAuthStore()
-const qrcodeCanvas = ref(null)
+const qrContainer = ref(null)
+const qrFrameRef = ref(null)
 const logoUrl = ref('')
-
 const salesCode = ref('')
+let qrInstance = null
 
 const link = computed(() => {
   const base = window.location.origin
@@ -51,74 +81,68 @@ const link = computed(() => {
   return `${base}/?s=${salesCode.value}`
 })
 
-async function drawLogoOnCanvas(canvas) {
-  if (!logoUrl.value) return
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  await new Promise((resolve, reject) => {
-    img.onload = resolve
-    img.onerror = reject
-    img.src = logoUrl.value
-  })
-  const ctx = canvas.getContext('2d')
-  const size = canvas.width
-  const logoSize = size * 0.24
-  const x = (size - logoSize) / 2
-  const y = (size - logoSize) / 2
+// Solid QR dot color — clean, flat design
+const QRDotColor = '#1a1a2e'
 
-  // 白色背景 + 阴影
-  ctx.shadowColor = 'rgba(0,0,0,0.12)'
-  ctx.shadowBlur = 8
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 2
-  ctx.fillStyle = '#ffffff'
-  const radius = 8
-  ctx.beginPath()
-  ctx.moveTo(x + radius, y)
-  ctx.lineTo(x + logoSize - radius, y)
-  ctx.quadraticCurveTo(x + logoSize, y, x + logoSize, y + radius)
-  ctx.lineTo(x + logoSize, y + logoSize - radius)
-  ctx.quadraticCurveTo(x + logoSize, y + logoSize, x + logoSize - radius, y + logoSize)
-  ctx.lineTo(x + radius, y + logoSize)
-  ctx.quadraticCurveTo(x, y + logoSize, x, y + logoSize - radius)
-  ctx.lineTo(x, y + radius)
-  ctx.quadraticCurveTo(x, y, x + radius, y)
-  ctx.closePath()
-  ctx.fill()
+function createQR() {
+  if (!qrContainer.value || !link.value) return
 
-  // 画图标（留内边距）
-  ctx.shadowColor = 'transparent'
-  const pad = logoSize * 0.12
-  ctx.drawImage(img, x + pad, y + pad, logoSize - pad * 2, logoSize - pad * 2)
-}
-
-async function drawQRCode() {
-  if (!qrcodeCanvas.value || !link.value) return
-  await QRCode.toCanvas(qrcodeCanvas.value, link.value, {
-    width: 240,
-    margin: 2,
-    color: { dark: '#1a1a2e', light: '#ffffff' }
-  })
-  if (logoUrl.value) {
-    await drawLogoOnCanvas(qrcodeCanvas.value).catch(() => {})
+  if (qrInstance) {
+    qrInstance.update({
+      data: link.value,
+    })
+    return
   }
+
+  qrInstance = new QRCodeStyling({
+    width: 260,
+    height: 260,
+    type: "svg",
+    data: link.value,
+    qrOptions: { errorCorrectionLevel: "H" },
+    dotsOptions: {
+      type: "rounded",
+      color: QRDotColor,
+    },
+    cornersSquareOptions: {
+      type: "extra-rounded",
+      color: QRDotColor,
+    },
+    cornersDotOptions: {
+      type: "dot",
+      color: QRDotColor,
+    },
+    backgroundOptions: {
+      color: "#ffffff",
+      round: 6,
+    },
+  })
+  qrInstance.append(qrContainer.value)
 }
 
 onMounted(async () => {
   salesCode.value = authStore.userInfo?.code || ''
+
   try {
     const res = await request.get('/config')
     if (res.data?.qrcode_logo) {
       logoUrl.value = res.data.qrcode_logo
     }
-  } catch(e) {}
+  } catch (e) {
+    // use defaults
+  }
+
   await nextTick()
-  await drawQRCode()
+  createQR()
 })
 
 watch(link, async () => {
   await nextTick()
-  drawQRCode()
+  createQR()
+})
+
+onUnmounted(() => {
+  qrInstance = null
 })
 
 const copyCode = () => {
@@ -130,35 +154,239 @@ const copyLink = () => {
   navigator.clipboard.writeText(link.value)
   ElMessage.success('推广链接已复制')
 }
+
+const saveQR = async () => {
+  if (!qrFrameRef.value) return
+  try {
+    const canvas = await html2canvas(qrFrameRef.value, {
+      backgroundColor: '#fff',
+      scale: 2,
+      useCORS: true,
+    })
+    const link = document.createElement('a')
+    link.download = 'cc-installer-promo-qr.png'
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    ElMessage.success('二维码已保存')
+  } catch (e) {
+    ElMessage.error('保存失败')
+  }
+}
 </script>
 
 <style scoped>
-.link-card {
-  max-width: 600px;
+.promotion-page {
+  max-width: 500px;
+  margin: 0 auto;
 }
-.qrcode-wrapper {
+
+/* ===== Main Card ===== */
+.promo-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f5;
+}
+
+/* ===== Body ===== */
+.promo-body {
+  padding: 32px;
+}
+
+/* ===== QR Section ===== */
+.qr-section {
   display: flex;
-  justify-content: center;
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid #f0f0f0;
+  flex-direction: column;
+  align-items: center;
 }
-.qrcode-box {
-  text-align: center;
-  padding: 24px;
+
+.qr-frame {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  display: inline-block;
+  padding: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  border: 1px solid #eef0f6;
 }
-.qrcode-box canvas {
+
+.qr-stage {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+}
+
+.qr-code-svg {
+  display: flex;
+}
+
+.qr-code-svg :deep(svg) {
   display: block;
-  margin: 0 auto;
-  border-radius: 8px;
+  border-radius: 4px;
 }
-.qrcode-tip {
-  margin-top: 12px;
-  font-size: 13px;
+
+/* ===== Logo badge — matching admin preview ===== */
+.qr-logo-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.qr-logo-badge-inner {
+  width: 92px;
+  height: 92px;
+  background: #fff;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-logo-img {
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
+}
+
+/* ===== Brand area — full-width line + brand name ===== */
+.qr-brand {
+  text-align: center;
+  padding-top: 0;
+  position: relative;
+}
+
+.qr-brand-line {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0 -16px 12px;
+}
+
+.qr-brand-text {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a2e;
+  letter-spacing: 4px;
+}
+
+/* ===== Hint ===== */
+.qr-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 18px 0 12px;
+  font-size: 14px;
   color: #909399;
+}
+
+/* ===== Save QR button ===== */
+.save-qr-btn {
+  width: 100%;
+}
+
+/* ===== Divider ===== */
+.promo-divider {
+  height: 1px;
+  background: #eef0f6;
+  margin: 20px 0;
+}
+
+/* ===== Info Section ===== */
+.info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.info-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  white-space: nowrap;
+  padding-top: 8px;
+  min-width: 56px;
+}
+
+.info-value {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.info-code {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  background: #f3f4f6;
+  padding: 8px 14px;
+  border-radius: 8px;
+  letter-spacing: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.info-link {
+  flex: 1;
+  font-size: 13px;
+  color: #6b7280;
+  background: #f9fafb;
+  padding: 8px 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid #f0f0f5;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .promo-body {
+    padding: 20px;
+  }
+
+  .qr-logo-badge-inner {
+    width: 74px;
+    height: 74px;
+  }
+
+  .qr-logo-img {
+    width: 58px;
+    height: 58px;
+  }
+
+  .qr-brand-line {
+    margin: 0 -12px 10px;
+  }
+
+  .qr-brand-text {
+    font-size: 12px;
+    letter-spacing: 3px;
+  }
+
+  .qr-brand {
+    padding-top: 0;
+  }
+
+  .info-code {
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+
+  .info-link {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
 }
 </style>

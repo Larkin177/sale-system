@@ -82,14 +82,29 @@
               <el-button size="small">上传图片</el-button>
             </el-upload>
           </div>
-          <div class="form-tip">上传后，销售推广链接二维码中间将显示此图标（建议 200x200px 方形PNG）</div>
+          <div class="form-tip">上传后，销售推广链接二维码中间将显示此图标，透明背景会自动获得白色圆底衬（建议 200×200px 方形 PNG）</div>
         </el-form-item>
         <el-form-item label="预览效果">
           <div class="qrcode-preview-box">
-            <canvas ref="qrcodePreviewCanvas" style="display:none;"></canvas>
-            <img v-if="qrcodePreviewDataUrl" :src="qrcodePreviewDataUrl" style="width:180px;height:180px;border-radius:8px;border:1px solid #e5e7eb;" />
+            <div v-if="qrcodeLogo" ref="previewRef" class="preview-stage-wrapper">
+              <div class="preview-stage">
+                <div ref="previewContainer" class="preview-qr"></div>
+                <div class="preview-logo-badge">
+                  <div class="preview-logo-badge-inner">
+                    <img :src="qrcodeLogo" alt="logo" class="preview-logo-img" />
+                  </div>
+                </div>
+              </div>
+              <div class="preview-brand">
+                <div class="preview-brand-line"></div>
+                <span class="preview-brand-text">CC-INSTALLER</span>
+              </div>
+            </div>
             <div v-else style="width:180px;height:180px;border-radius:8px;border:1px dashed #dcdfe6;display:flex;align-items:center;justify-content:center;color:#c0c4cc;font-size:13px;">预览</div>
           </div>
+          <el-button v-if="qrcodeLogo" size="small" plain @click="savePreview" style="margin-top:8px">
+            <el-icon><Download /></el-icon> 保存预览二维码
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -104,8 +119,10 @@
 import { ref, reactive, watch, onMounted, nextTick } from 'vue'
 import AdminLayout from '@/components/AdminLayout.vue'
 import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import QRCode from 'qrcode'
+import QRCodeStyling from 'qr-code-styling'
+import html2canvas from 'html2canvas'
 
 const loading = ref(false)
 const uploadUrl = '/api/admin/upload'
@@ -115,57 +132,58 @@ const config = ref({ default_commission_rate: 10 })
 const payMode = reactive({ wechat_pay_mode: 'static', alipay_pay_mode: 'static' })
 const qrCodes = reactive({ wechat_qrcode: '', alipay_qrcode: '' })
 const qrcodeLogo = ref('')
-const qrcodePreviewCanvas = ref(null)
-const qrcodePreviewDataUrl = ref('')
+const siteUrl = ref('')
+const previewContainer = ref(null)
+const previewRef = ref(null)
+let qrPreviewInstance = null
 
 // 监听图标变化，生成预览二维码
 watch(qrcodeLogo, async (val) => {
   await nextTick()
-  if (!val || !qrcodePreviewCanvas.value) {
-    qrcodePreviewDataUrl.value = ''
+  if (!val || !previewContainer.value) {
+    if (previewContainer.value) previewContainer.value.innerHTML = ''
+    qrPreviewInstance = null
     return
   }
-  try {
-    const canvas = qrcodePreviewCanvas.value
-    await QRCode.toCanvas(canvas, 'https://example.com/?s=DEMO', {
-      width: 180, margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' }
-    })
-    // 叠加图标
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    await new Promise((resolve, reject) => {
-      img.onload = resolve; img.onerror = reject; img.src = val
-    })
-    const ctx = canvas.getContext('2d')
-    const size = canvas.width
-    const logoSize = size * 0.24
-    const x = (size - logoSize) / 2
-    const y = (size - logoSize) / 2
-    ctx.shadowColor = 'rgba(0,0,0,0.12)'
-    ctx.shadowBlur = 6
-    ctx.shadowOffsetX = 0
-    ctx.shadowOffsetY = 2
-    ctx.fillStyle = '#ffffff'
-    const radius = 6
-    ctx.beginPath()
-    ctx.moveTo(x + radius, y); ctx.lineTo(x + logoSize - radius, y)
-    ctx.quadraticCurveTo(x + logoSize, y, x + logoSize, y + radius)
-    ctx.lineTo(x + logoSize, y + logoSize - radius)
-    ctx.quadraticCurveTo(x + logoSize, y + logoSize, x + logoSize - radius, y + logoSize)
-    ctx.lineTo(x + radius, y + logoSize)
-    ctx.quadraticCurveTo(x, y + logoSize, x, y + logoSize - radius)
-    ctx.lineTo(x, y + radius)
-    ctx.quadraticCurveTo(x, y, x + radius, y)
-    ctx.closePath(); ctx.fill()
-    ctx.shadowColor = 'transparent'
-    const pad = logoSize * 0.12
-    ctx.drawImage(img, x + pad, y + pad, logoSize - pad * 2, logoSize - pad * 2)
-    qrcodePreviewDataUrl.value = canvas.toDataURL()
-  } catch(e) {
-    qrcodePreviewDataUrl.value = ''
-  }
+  // 清除旧内容
+  previewContainer.value.innerHTML = ''
+  qrPreviewInstance = null
+
+  qrPreviewInstance = new QRCodeStyling({
+    width: 260,
+    height: 260,
+    type: "svg",
+    data: siteUrl.value || window.location.origin,
+    qrOptions: { errorCorrectionLevel: "H" },
+    dotsOptions: {
+      type: "rounded",
+      color: "#1a1a2e",
+    },
+    cornersSquareOptions: { type: "extra-rounded", color: "#1a1a2e" },
+    cornersDotOptions: { type: "dot", color: "#1a1a2e" },
+    backgroundOptions: { color: "#ffffff", round: 6 },
+  })
+  qrPreviewInstance.append(previewContainer.value)
 })
+
+// 保存预览二维码
+const savePreview = async () => {
+  if (!previewRef.value) return
+  try {
+    const canvas = await html2canvas(previewRef.value, {
+      backgroundColor: '#fff',
+      scale: 2,
+      useCORS: true,
+    })
+    const link = document.createElement('a')
+    link.download = 'qr-preview.png'
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    ElMessage.success('二维码已保存')
+  } catch (e) {
+    ElMessage.error('保存失败')
+  }
+}
 
 onMounted(async () => {
   try {
@@ -177,8 +195,8 @@ onMounted(async () => {
       qrCodes.wechat_qrcode = res.data.wechat_qrcode || ''
       qrCodes.alipay_qrcode = res.data.alipay_qrcode || ''
       qrcodeLogo.value = res.data.qrcode_logo || ''
-
-      }
+      siteUrl.value = res.data.site_url || window.location.origin
+    }
   } catch (e) { console.error('获取配置失败') }
 })
 
@@ -212,4 +230,77 @@ const saveAll = async () => {
 .el-radio { display: block; margin-bottom: 8px; height: auto; line-height: 22px; padding: 4px 0; }
 .form-tip { font-size: 12px; color: #9ca3af; margin-top: 4px; display: block; }
 .qrcode-preview-box { display: flex; align-items: center; justify-content: center; min-height: 180px; }
+
+/* Preview QR stage — matches the actual sales page display */
+.preview-stage {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.preview-stage-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.preview-qr {
+  display: flex;
+}
+
+.preview-qr :deep(svg) {
+  display: block;
+}
+
+.preview-logo-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.preview-logo-badge-inner {
+  width: 92px;
+  height: 92px;
+  background: #fff;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-logo-img {
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
+}
+
+.preview-brand {
+  text-align: center;
+  padding-top: 0;
+  position: relative;
+  width: 100%;
+}
+
+.preview-brand-line {
+  height: 1px;
+  background: #e5e7eb;
+  width: 260px;
+  margin: 0 auto 12px;
+}
+
+.preview-brand-text {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a2e;
+  letter-spacing: 4px;
+}
 </style>
